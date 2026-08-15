@@ -89,6 +89,12 @@
     font-size:13px;font-weight:700;color:var(--red);
     background:#FBEBEC;border-radius:10px;padding:10px 16px;line-height:1.6;max-width:320px;
   }
+  .shoplink{
+    font-size:12.5px;font-weight:700;color:var(--ink-soft);
+    background:var(--white);border:1px solid rgba(23,35,61,.14);border-radius:999px;
+    padding:8px 18px;text-decoration:none;
+  }
+  .shoplink b{color:var(--red)}
   /* 업그레이드 카드 */
   #cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px}
   .card{
@@ -115,11 +121,12 @@
     <div class="howto">
       <div><b>드래그</b> 또는 <b>방향키·WASD</b>로 도망 다니세요</div>
       <div>붓은 <b>알아서 날아갑니다</b> — 몹을 <b>전멸시키면</b> 다음 라운드!</div>
-      <div>방울을 모으면 라운드 사이에 <b>스킬 3개 중 1개</b>를 골라요</div>
+      <div>방울 게이지(맨 위)가 차면 <b>바로 스킬 3택</b>이 떠요</div>
       <div><b>5라운드마다 보스</b> — 15라운드 곰팡이 대왕을 잡으면 클리어</div>
     </div>
     <div class="evt hidden" id="evtBanner"></div>
     <button id="startBtn">출동!</button>
+    <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">이 게임의 주인공 <b>곰팡이제거제 →</b></a>
   </div>
 
   <div class="overlay hidden" id="clearScreen">
@@ -135,6 +142,7 @@
     <div class="fine" id="clearGuide"></div>
     <div class="fine hidden" id="clearLegal">본 이벤트는 Instagram과 무관하며 Instagram의 후원·보증·운영을 받지 않습니다.</div>
     <button id="contBtn">계속 살아남기</button>
+    <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">현실 곰팡이는 붓으로 <b>곰팡이제거제 →</b></a>
   </div>
 
   <div class="overlay hidden" id="levelScreen">
@@ -155,6 +163,7 @@
     <div class="tag" id="bestLine">최고 기록 0라운드</div>
     <button id="retryBtn">다시 하기</button>
     <div class="tag">클리너는 클위너!</div>
+    <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">곰팡이 대왕이 얄미웠다면 <b>곰팡이제거제 →</b></a>
   </div>
 </div>
 
@@ -303,8 +312,7 @@
           openLevelUp();               // 쌓인 레벨만큼 연속 선택
         } else {
           levelScreen.classList.add('hidden');
-          state = 'play';
-          startRound(roundNum + 1);
+          state = 'play';             // 라운드 전환은 update의 clear 단계가 처리
         }
       });
       cardsBox.appendChild(b);
@@ -529,13 +537,13 @@
         gems.splice(i, 1);
         xp += g.v;
         sfx.ding();
-        while (xp >= xpNeed) {          // 스킬 선택은 라운드 사이에 몰아서
+        while (xp >= xpNeed) {          // 게이지가 차면 그 자리에서 스킬 선택
           xp -= xpNeed;
           level++;
           xpNeed = 4 + level * 3;
           pendingLevels++;
-          lvFlash = 1.4;
         }
+        if (pendingLevels > 0) { openLevelUp(); return; }
       }
     }
 
@@ -584,13 +592,8 @@
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
 
-  // 인증 코드 — 날짜·기록으로 생성 (검증기는 운영 가이드에)
-  function makeCode() {
-    const d = new Date();
-    const day = (d.getFullYear() % 100) * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-    const v = (day * 131 + kills * 17 + Math.floor(t) * 7 + level * 3) % 46655;
-    return 'CW-' + day.toString(36).toUpperCase() + '-' + v.toString(36).toUpperCase().padStart(3, '0');
-  }
+  // 인증 코드 — 사전 생성 100개 중 무작위 표시 (사용 처리 명단은 운영 가이드에)
+  const CODES = ["CW-GM4S","CW-U4B8","CW-Q5W9","CW-PD8P","CW-Q75J","CW-WPZK","CW-82HG","CW-DZ4A","CW-8FS5","CW-X67G","CW-UZDJ","CW-SRBC","CW-YRHV","CW-HJBK","CW-DQ3Y","CW-3957","CW-YDC8","CW-DBQP","CW-YYBG","CW-UCDS","CW-TFDF","CW-UJ5W","CW-8WNR","CW-3UG4","CW-QU75","CW-WRGX","CW-9EBY","CW-T9XY","CW-QPHN","CW-SPFW","CW-8YU3","CW-KKNJ","CW-Y3RU","CW-NB95","CW-2V4K","CW-2KYF","CW-45KZ","CW-3XYW","CW-V58Q","CW-NHK2","CW-KATS","CW-3V9P","CW-95NX","CW-ZP27","CW-W7HG","CW-WYPN","CW-JVSM","CW-9PDH","CW-AAVF","CW-D7G7","CW-58UZ","CW-S6SR","CW-JJS4","CW-KK4X","CW-S4TU","CW-K8A2","CW-9CX2","CW-X7SD","CW-UZZK","CW-DW48","CW-JCGU","CW-QUPZ","CW-TWDG","CW-6NVF","CW-FHVU","CW-GWBW","CW-57WS","CW-RP2M","CW-BNN5","CW-WJN4","CW-ACWA","CW-YJNN","CW-XCBG","CW-4JN7","CW-MSE4","CW-TMNR","CW-B7UP","CW-RC9B","CW-Z662","CW-HB8R","CW-YKZE","CW-EN72","CW-XYA2","CW-6YQW","CW-M8TD","CW-EQJ8","CW-MYGN","CW-YVUZ","CW-6ADP","CW-HMPT","CW-KXHA","CW-N2A9","CW-5CGT","CW-7797","CW-H9H4","CW-MKAC","CW-H84B","CW-ERAU","CW-DJUN","CW-469H"];
 
   function openClear() {
     state = 'clear';
@@ -599,7 +602,7 @@
     document.getElementById('stCTime').textContent = fmt(t);
     document.getElementById('stCKill').textContent = kills;
     document.getElementById('stCLv').textContent = level;
-    document.getElementById('clearCode').textContent = makeCode();
+    document.getElementById('clearCode').textContent = CODES[Math.floor(Math.random() * CODES.length)];
     clearScreen.classList.remove('hidden');
   }
 
@@ -810,14 +813,6 @@
       cx.font = '900 34px "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif';
       cx.textAlign = 'center';
       cx.fillText('라운드 클리어!', W / 2, H * .42);
-    }
-    if (lvFlash > 0 && phase === 'fight') {
-      cx.globalAlpha = Math.min(1, lvFlash);
-      cx.fillStyle = '#CF3339';
-      cx.font = '800 17px "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif';
-      cx.textAlign = 'center';
-      cx.fillText('레벨 업! 라운드 끝나면 스킬을 골라요', W / 2, H * .18);
-      cx.globalAlpha = 1;
     }
     // 보스 경고
     if (bossWarn > 0 && Math.floor(bossWarn * 5) % 2 === 0) {
