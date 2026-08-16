@@ -122,6 +122,7 @@
       <div><b>드래그</b> 또는 <b>방향키·WASD</b>로 도망 다니세요</div>
       <div>붓은 <b>알아서 날아갑니다</b> — 몹을 <b>전멸시키면</b> 다음 라운드!</div>
       <div>방울 게이지(맨 위)가 차면 <b>바로 스킬 3택</b>이 떠요</div>
+      <div>보스·물때가 뱉는 <b>포자탄은 붓으로 못 막아요</b> — 몸으로 피하기!</div>
       <div><b>5라운드마다 보스</b> — 15라운드 곰팡이 대왕을 잡으면 클리어</div>
     </div>
     <div class="evt hidden" id="evtBanner"></div>
@@ -240,15 +241,15 @@
 
   // ---- 상태 ----
   let state = 'start';
-  let p, w, enemies, bullets, gems, parts, t, kills, level, xp, xpNeed;
+  let p, w, enemies, bullets, gems, parts, shots, t, kills, level, xp, xpNeed;
   let roundNum, phase, queue, pendingLevels, clearTimer, introTimer, lvFlash;
   let spawnAt, bossWarn, shake, cleared;
   let bestRound = +(localStorage.getItem('cw-sv-best-round') || 0);
 
   function reset() {
-    p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 175, magnet: 70, iframe: 0, tilt: 0, face: 1 };
+    p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 175, magnet: 90, iframe: 0, tilt: 0, face: 1 };
     w = { cd: .75, timer: 0, count: 1, dmg: 1, pierce: 0, brushes: 0, brushAngle: 0 };
-    enemies = []; bullets = []; gems = []; parts = [];
+    enemies = []; bullets = []; gems = []; parts = []; shots = [];
     t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5;
     roundNum = 0; phase = 'fight'; queue = []; pendingLevels = 0;
     clearTimer = 0; introTimer = 0; lvFlash = 0;
@@ -256,7 +257,7 @@
     UPS.forEach(u => u.lvl = 0);
   }
 
-  function roundMul() { return 1 + (roundNum - 1) * .3; }
+  function roundMul() { return 1 + (roundNum - 1) * .35; }
 
   function startRound(n) {
     roundNum = n;
@@ -264,6 +265,7 @@
     introTimer = 1.3;
     spawnAt = .6;
     queue = [];
+    shots = [];
     if (n % 5 === 0) {
       spawnBoss(n / 5);
       const extra = 6 + n;                 // 보스전에도 잡몹이 섞여 나온다
@@ -281,12 +283,11 @@
 
   // ---- 업그레이드 ----
   const UPS = [
-    { name: '붓 하나 더', desc: '붓이 한 번에 하나 더 날아가요', max: 4, apply: () => w.count++ },
-    { name: '빠른 손놀림', desc: '붓 던지는 속도가 빨라져요', max: 5, apply: () => w.cd *= .82 },
-    { name: '진한 세제', desc: '붓 한 방이 더 아파요', max: 5, apply: () => w.dmg++ },
-    { name: '회전 붓', desc: '주위를 붓이 빙글빙글 돌며 닦아요', max: 3, apply: () => w.brushes++ },
+    { name: '붓 하나 더', desc: '붓이 한 번에 하나 더 날아가요', max: 3, apply: () => w.count++ },
+    { name: '빠른 손놀림', desc: '붓 던지는 속도가 빨라져요', max: 4, apply: () => w.cd *= .85 },
+    { name: '진한 세제', desc: '던지는 붓 한 방이 더 아파요', max: 5, apply: () => w.dmg++ },
+    { name: '회전 붓', desc: '주위를 도는 붓 +1 — 스치면 콕콕 견제', max: 2, apply: () => w.brushes++ },
     { name: '스피드 업', desc: '이동 속도 +15%', max: 4, apply: () => p.speed *= 1.15 },
-    { name: '방울 자석', desc: '경험치 방울을 멀리서도 끌어와요', max: 4, apply: () => p.magnet += 45 },
     { name: '튼튼한 용기', desc: '최대 체력 +1, 체력 1 회복', max: 3, apply: () => { p.maxHp++; p.hp = Math.min(p.maxHp, p.hp + 1); } },
     { name: '관통 붓', desc: '붓이 적을 뚫고 지나가요', max: 3, apply: () => w.pierce++ },
   ];
@@ -366,7 +367,7 @@
     } else if (type === 'hair') {  // 머리카락 — 빠르고 약함
       e = { type, r: 13, hp: 1 * mul, speed: rnd(105, 140), xp: 1 };
     } else {                       // 곰팡이 — 기본
-      e = { type, r: rnd(16, 21), hp: 2 * mul, speed: rnd(55, 70), xp: 1 };
+      e = { type, r: rnd(16, 21), hp: 2 * mul, speed: rnd(60, 78), xp: 1 };
     }
     Object.assign(e, edgeSpawn(e.r), { maxHp: e.hp, wob: rnd(0, 6.28), flash: 0, brushCd: 0, boss: false });
     enemies.push(e);
@@ -480,8 +481,29 @@
       e.wob += dt * 3;
       if (e.flash > 0) e.flash -= dt;
       const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
-      e.x += dx / d * e.speed * dt;
-      e.y += dy / d * e.speed * dt;
+      let spd = e.speed;
+      if (e.type === 'hair') {             // 가끔 2배속 돌진
+        if (e.lungeAt === undefined) e.lungeAt = rnd(1, 2.5);
+        e.lungeAt -= dt;
+        if (e.lungeAt <= 0) { e.lunge = .5; e.lungeAt = rnd(2.5, 4); }
+        if (e.lunge > 0) { e.lunge -= dt; spd *= 2.2; }
+      }
+      if (e.boss && e.hp < e.maxHp * .3) spd *= 1.45;   // 격노
+      e.x += dx / d * spd * dt;
+      e.y += dy / d * spd * dt;
+
+      // 포자탄 — 붓으로 못 막는다, 몸으로 피할 것 (보스 상시 · 6라운드+ 물때)
+      if (e.boss || (e.type === 'scale' && roundNum >= 6)) {
+        if (e.shotAt === undefined) e.shotAt = rnd(1.5, 3);
+        e.shotAt -= dt;
+        if (e.shotAt <= 0 && d > 90) {
+          e.shotAt = e.boss ? 3 : 4.5;
+          const a = Math.atan2(dy, dx);
+          const sp = e.boss ? 165 : 140;
+          shots.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            r: 8, life: 4.5, c: e.type === 'pink' ? '#D4728F' : (e.type === 'scale' ? '#8A906F' : '#5B7A4C') });
+        }
+      }
 
       // 보스는 부하 소환
       if (e.boss) {
@@ -505,18 +527,33 @@
           const a = w.brushAngle + k * 6.28 / w.brushes;
           const bx = p.x + Math.cos(a) * 72, by = p.y + Math.sin(a) * 72;
           if (Math.hypot(bx - e.x, by - e.y) < 26 + e.r * .5) {
-            e.brushCd = .35;
-            hurtEnemy(i, 1 + Math.floor(w.dmg / 2), (e.x - p.x) * 3, (e.y - p.y) * 3);
+            e.brushCd = .5;                 // 견제용 — 벽이 되면 안 됨
+            hurtEnemy(i, 1, (e.x - p.x) * 3, (e.y - p.y) * 3);
             burst(bx, by, 'bubble', 3);
             break;
           }
         }
       }
 
-      // 덕구 접촉
+      // 접촉 피해
       if (p.iframe <= 0 && d < e.r + p.r - 6) {
         p.hp--;
-        p.iframe = 1.1;
+        p.iframe = .9;
+        shake = reduceMotion ? 0 : .5;
+        sfx.hurt();
+        if (p.hp <= 0) { gameOver(); return; }
+      }
+    }
+
+    // 포자탄 이동·피격
+    for (let i = shots.length - 1; i >= 0; i--) {
+      const s = shots[i];
+      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
+      if (s.life <= 0 || s.x < -20 || s.x > W + 20 || s.y < -20 || s.y > H + 20) { shots.splice(i, 1); continue; }
+      if (p.iframe <= 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r - 8) {
+        shots.splice(i, 1);
+        p.hp--;
+        p.iframe = .9;
         shake = reduceMotion ? 0 : .5;
         sfx.hurt();
         if (p.hp <= 0) { gameOver(); return; }
@@ -561,7 +598,7 @@
     e.hp -= dmg;
     e.flash = .1;
     const kl = Math.hypot(kx, ky) || 1;
-    e.x += kx / kl * 7; e.y += ky / kl * 7;
+    e.x += kx / kl * 4; e.y += ky / kl * 4;
     sfx.hit();
     if (e.hp <= 0) {
       enemies.splice(idx, 1);
@@ -843,6 +880,13 @@
       cx.beginPath(); cx.arc(g.x, g.y, g.v > 1 ? 9 : 6, 0, 6.28); cx.fill(); cx.stroke();
     }
     for (const e of enemies) drawEnemy(e);
+    // 포자탄
+    for (const s of shots) {
+      cx.fillStyle = s.c;
+      cx.beginPath(); cx.arc(s.x, s.y, s.r, 0, 6.28); cx.fill();
+      cx.fillStyle = 'rgba(23,35,61,.3)';
+      cx.beginPath(); cx.arc(s.x, s.y, s.r * .4, 0, 6.28); cx.fill();
+    }
     // 던진 붓 (빙글빙글)
     for (const b of bullets) {
       cx.save();
