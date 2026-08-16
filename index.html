@@ -101,6 +101,13 @@
     font-size:15px;padding:12px 32px;
   }
   button.kakao:active{background:#F2D900}
+  .coupon{
+    background:var(--white);border:2px dashed var(--red);border-radius:14px;
+    padding:10px 26px;cursor:pointer;text-align:center;
+  }
+  .coupon .cp-t{font-size:12px;font-weight:700;color:var(--ink-soft)}
+  .coupon .cp-c{font-size:24px;font-weight:900;letter-spacing:.08em;color:var(--red)}
+  .coupon .cp-s{font-size:11px;font-weight:600;color:var(--ink-soft)}
   /* 업그레이드 카드 */
   #cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px}
   .card{
@@ -169,6 +176,11 @@
       <div class="col"><div class="big" id="stLv">1</div><div class="sub">레벨</div></div>
     </div>
     <div class="tag" id="bestLine">최고 기록 0라운드</div>
+    <div class="coupon hidden" id="couponBox">
+      <div class="cp-t">아쉬우니까 — 자사몰 10% 할인 쿠폰</div>
+      <div class="cp-c" id="couponCode">CLEWGAME10</div>
+      <div class="cp-s" id="couponHint">누르면 복사 · clewiner.com 전용</div>
+    </div>
     <button id="retryBtn">다시 하기</button>
     <div class="tag">클리너는 클위너!</div>
     <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">곰팡이 대왕이 얄미웠다면 <b>곰팡이제거제 →</b></a>
@@ -197,6 +209,8 @@
     // 클위너 카카오톡 채널 채팅 주소 (예: 'http://pf.kakao.com/_abcDE/chat')
     // 비워두면 카카오 버튼이 숨겨진다
     kakaoChat: '',
+    // 게임 오버 위로 쿠폰 — 자사몰 전용 10% (임시 코드, 카페24에 실제 발급 후 교체)
+    coupon: 'CLEWGAME10',
   };
   const evtActive = EVENT.live && Date.now() <= EVENT.end;
   {
@@ -212,6 +226,19 @@
       document.getElementById('clearLegal').classList.remove('hidden');
     } else {
       guide.textContent = '대단해요! 인증 코드와 함께 자랑해 보세요.';
+    }
+    // 게임 오버 위로 쿠폰
+    const couponBox = document.getElementById('couponBox');
+    if (evtActive && EVENT.coupon) {
+      document.getElementById('couponCode').textContent = EVENT.coupon;
+      couponBox.classList.remove('hidden');
+      couponBox.addEventListener('click', () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(EVENT.coupon).then(() => {
+            document.getElementById('couponHint').textContent = '✅ 복사됨! 자사몰 결제 때 붙여넣기';
+          }).catch(() => {});
+        }
+      });
     }
   }
 
