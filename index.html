@@ -400,18 +400,17 @@
     }
     return music.bossEl;
   }
-  function musicFor(n) {
-    if (n % 5 === 0) {
-      stopChip();
-      music.mode = 'boss';
-      const el = getBossEl();
-      el.currentTime = 0;
-      if (!music.muted) el.play().catch(() => {});
-    } else {
-      if (music.bossEl) { music.bossEl.pause(); music.bossEl.currentTime = 0; }
-      music.mode = 'chip';
-      startChip();
-    }
+  function musicBoss() {
+    stopChip();
+    music.mode = 'boss';
+    const el = getBossEl();
+    el.currentTime = 0;
+    if (!music.muted) el.play().catch(() => {});
+  }
+  function musicNormal() {
+    if (music.bossEl) { music.bossEl.pause(); music.bossEl.currentTime = 0; }
+    music.mode = 'chip';
+    startChip();
   }
   function musicStop() {
     stopChip();
@@ -431,7 +430,7 @@
   let state = 'start';
   let p, w, enemies, bullets, gems, parts, shots, puddles, t, kills, level, xp, xpNeed;
   let roundNum, phase, queue, pendingLevels, clearTimer, introTimer, lvFlash;
-  let spawnAt, bossWarn, shake, cleared;
+  let spawnAt, bossWarn, shake, cleared, bossPending;
   let bestRound = +(localStorage.getItem('cw-sv-best-round') || 0);
 
   function reset() {
@@ -443,7 +442,7 @@
     t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5;
     roundNum = 0; phase = 'fight'; queue = []; pendingLevels = 0;
     clearTimer = 0; introTimer = 0; lvFlash = 0;
-    spawnAt = 0; bossWarn = 0; shake = 0; cleared = false;
+    spawnAt = 0; bossWarn = 0; shake = 0; cleared = false; bossPending = false;
     UPS.forEach(u => u.lvl = 0);
   }
 
@@ -457,17 +456,14 @@
     queue = [];
     shots = [];
     puddles = [];
-    musicFor(n);
-    if (n % 5 === 0) {
-      spawnBoss(n / 5);                    // 보스전 압박은 전부 보스의 소환에서 나온다
-    } else {
-      const total = 7 + n * 2;
-      for (let i = 0; i < total; i++) {
-        const r = Math.random();
-        if (n >= 4 && r < .18) queue.push('scale');
-        else if (n >= 3 && r < .45) queue.push('hair');
-        else queue.push('mold');
-      }
+    musicNormal();
+    bossPending = n % 5 === 0;             // 보스는 웨이브를 전멸시켜야 등장한다
+    const total = 7 + n * 2;
+    for (let i = 0; i < total; i++) {
+      const r = Math.random();
+      if (n >= 4 && r < .18) queue.push('scale');
+      else if (n >= 3 && r < .45) queue.push('hair');
+      else queue.push('mold');
     }
   }
 
@@ -616,8 +612,8 @@
     let e;
     if (type === 'scale') {        // 물때 — 느리고 단단
       e = { type, r: 26, hp: 6 * mul, speed: rnd(30, 42), xp: 3 };
-    } else if (type === 'hair') {  // 머리카락 — 빠르고 약함
-      e = { type, r: 13, hp: 1 * mul, speed: rnd(100, 130), xp: 1 };
+    } else if (type === 'hair') {  // 머리카락 — 빠름, 한 방엔 안 죽게
+      e = { type, r: 13, hp: 1.5 * mul, speed: rnd(100, 130), xp: 1 };
     } else {                       // 곰팡이 — 기본, 라운드가 갈수록 가속
       e = { type, r: rnd(16, 21), hp: 2 * mul, speed: rnd(50, 64) + Math.min(14, roundNum), xp: 1 };
     }
@@ -628,7 +624,7 @@
     const mul = roundMul();
     let m;
     if (type === 'scale') m = { type, r: 22, hp: 5 * mul, speed: rnd(30, 40) };
-    else if (type === 'hair') m = { type, r: 13, hp: 1 * mul, speed: rnd(100, 128) };
+    else if (type === 'hair') m = { type, r: 13, hp: 1.5 * mul, speed: rnd(100, 128) };
     else m = { type: 'mold', r: 16, hp: 2 * mul, speed: rnd(62, 74) };
     Object.assign(m, { x, y, maxHp: m.hp, xp: 0, minion: true,
       wob: rnd(0, 6.28), flash: 0, brushCd: 0, boss: false });
@@ -717,9 +713,15 @@
         spawnAt = Math.max(.25, .8 - roundNum * .028);
       }
       if (!queue.length && enemies.length === 0) {
-        phase = 'clear';
-        clearTimer = 1.2;
-        sfx.lvup();
+        if (bossPending) {
+          bossPending = false;             // 웨이브 전멸 — 이제 보스 등장
+          spawnBoss(roundNum / 5);
+          musicBoss();
+        } else {
+          phase = 'clear';
+          clearTimer = 1.2;
+          sfx.lvup();
+        }
       }
     } else if (phase === 'clear') {
       clearTimer -= dt;
@@ -928,8 +930,10 @@
     const e = enemies[idx];
     e.hp -= dmg;
     e.flash = .1;
-    const kl = Math.hypot(kx, ky) || 1;
-    e.x += kx / kl * 4; e.y += ky / kl * 4;
+    if (!e.boss) {                        // 넉백 — 보스는 밀리지 않고, 잡몹도 살짝만
+      const kl = Math.hypot(kx, ky) || 1;
+      e.x += kx / kl * 2; e.y += ky / kl * 2;
+    }
     sfx.hit();
     if (e.hp <= 0) {
       enemies.splice(idx, 1);
@@ -977,7 +981,7 @@
 
   function openClear() {
     state = 'clear';
-    musicFor(roundNum + 1);               // 승전 — 평상시 곡으로 복귀
+    musicNormal();                        // 승전 — 평상시 곡으로 복귀
     sfx.lvup();
     setTimeout(() => sfx.lvup(), 250);
     document.getElementById('stCTime').textContent = fmt(t);
