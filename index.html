@@ -104,6 +104,16 @@
     padding:8px 18px;text-decoration:none;
   }
   .shoplink b{color:var(--red)}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .btnrow button{font-size:14px;padding:12px 22px}
+  #certOverlay{
+    position:absolute;inset:0;z-index:10;
+    background:rgba(23,35,61,.85);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:24px;cursor:pointer;
+  }
+  #certOverlay img{max-width:100%;max-height:78%;border-radius:12px}
+  #certOverlay p{color:#fff;font-size:13.5px;font-weight:700;text-align:center;word-break:keep-all}
   button.kakao{
     background:#FEE500;color:#191919;
     box-shadow:0 6px 16px rgba(0,0,0,.15);
@@ -184,7 +194,10 @@
     <div class="code" id="clearCode">CW-000-000</div>
     <div class="fine" id="clearGuide"></div>
     <div class="fine hidden" id="clearLegal">본 이벤트는 Instagram과 무관하며 Instagram의 후원·보증·운영을 받지 않습니다.</div>
-    <button class="kakao hidden" id="kakaoBtn">💬 카카오톡으로 코드 보내기</button>
+    <div class="btnrow">
+      <button id="certBtn">📸 인증 이미지 복사</button>
+      <button class="kakao hidden" id="kakaoBtn">💬 카카오톡 전송</button>
+    </div>
     <button id="contBtn">계속 살아남기</button>
     <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">현실 곰팡이는 붓으로 <b>곰팡이제거제 →</b></a>
   </div>
@@ -255,9 +268,9 @@
     } else {
       guide.textContent = '대단해요! 인증 코드와 함께 자랑해 보세요.';
     }
-    // 게임 오버 위로 쿠폰
+    // 게임 오버 위로 쿠폰 (임시 — 테스트 모드에서도 노출)
     const couponBox = document.getElementById('couponBox');
-    if (evtActive && EVENT.coupon) {
+    if (EVENT.coupon) {
       document.getElementById('couponCode').textContent = EVENT.coupon;
       couponBox.classList.remove('hidden');
       couponBox.addEventListener('click', () => {
@@ -535,18 +548,88 @@
     clearScreen.classList.add('hidden');
     state = 'play';
   });
-  // 카카오톡 인증 — 코드를 복사해 주고 채널 채팅을 연다
+  // 카카오톡 전송 — 채널 채팅을 연다 (이미지는 옆 버튼으로 복사)
   const kakaoBtn = document.getElementById('kakaoBtn');
-  if (EVENT.kakaoChat && evtActive) kakaoBtn.classList.remove('hidden');
-  kakaoBtn.addEventListener('click', () => {
+  if (EVENT.kakaoChat) kakaoBtn.classList.remove('hidden');
+  kakaoBtn.addEventListener('click', () => window.open(EVENT.kakaoChat, '_blank'));
+
+  // 인증 이미지 생성·복사
+  const certBtn = document.getElementById('certBtn');
+  function drawCertHero(x, cx0, cy0, s) {
+    x.save(); x.translate(cx0, cy0); x.scale(s, s);
+    x.fillStyle = '#FFFFFF'; x.strokeStyle = '#D5DCE4'; x.lineWidth = 2.5;
+    x.beginPath(); x.roundRect(-11, -46, 22, 17, 4); x.fill(); x.stroke();
+    x.beginPath(); x.roundRect(-19, -31, 38, 62, 10); x.fill(); x.stroke();
+    x.fillStyle = '#CF3339';
+    x.font = '900 8px Arial';
+    x.textAlign = 'left';
+    x.save(); x.translate(-8, -25); x.rotate(1.5708); x.fillText('CLEW!NER', 0, 0); x.restore();
+    x.fillStyle = '#17233D';
+    x.beginPath(); x.arc(3, -14, 2.8, 0, 6.28); x.fill();
+    x.beginPath(); x.arc(14, -14, 2.8, 0, 6.28); x.fill();
+    x.strokeStyle = '#17233D'; x.lineWidth = 2; x.lineCap = 'round';
+    x.beginPath(); x.arc(8.5, -8, 4, .4, 2.74); x.stroke();
+    x.restore();
+    x.textAlign = 'center';
+  }
+  function buildCert() {
+    const c = document.createElement('canvas');
+    c.width = 720; c.height = 1000;
+    const x = c.getContext('2d');
+    x.fillStyle = '#EAF3F5'; x.fillRect(0, 0, 720, 1000);
+    x.strokeStyle = '#D0E2E7'; x.lineWidth = 4;
+    x.beginPath();
+    for (let i = 90; i < 1000; i += 90) { x.moveTo(0, i); x.lineTo(720, i); }
+    for (let i = 90; i < 720; i += 90) { x.moveTo(i, 0); x.lineTo(i, 1000); }
+    x.stroke();
+    x.fillStyle = '#FFFFFF';
+    x.strokeStyle = '#C3D6DC'; x.lineWidth = 3;
+    x.beginPath(); x.roundRect(50, 60, 620, 880, 28); x.fill(); x.stroke();
+    x.textAlign = 'center';
+    x.fillStyle = '#5A6B85';
+    x.font = '700 22px "Malgun Gothic",sans-serif';
+    x.fillText('C L E W I N E R   S U R V I V O R', 360, 130);
+    x.fillStyle = '#17233D';
+    x.font = '900 56px "Malgun Gothic",sans-serif';
+    x.fillText('곰팡이 대왕 격파!', 360, 200);
+    drawCertHero(x, 360, 400, 2.4);
+    x.fillStyle = '#5A6B85';
+    x.font = '700 26px "Malgun Gothic",sans-serif';
+    x.fillText('라운드 ' + roundNum + ' · 퇴치 ' + kills + ' · 레벨 ' + level + ' · ' + fmt(t), 360, 560);
     const code = document.getElementById('clearCode').textContent;
-    const go = () => window.open(EVENT.kakaoChat, '_blank');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(() => {
-        kakaoBtn.textContent = '✅ 코드 복사됨! 채팅창에 붙여넣기';
-        setTimeout(go, 400);
-      }).catch(go);
-    } else go();
+    x.strokeStyle = '#CF3339'; x.lineWidth = 3; x.setLineDash([10, 7]);
+    x.beginPath(); x.roundRect(140, 610, 440, 110, 16); x.stroke();
+    x.setLineDash([]);
+    x.fillStyle = '#CF3339';
+    x.font = '900 54px "Malgun Gothic",sans-serif';
+    x.fillText(code, 360, 682);
+    x.fillStyle = '#17233D';
+    x.font = '800 30px "Malgun Gothic",sans-serif';
+    x.fillText('game.clewiner.com', 360, 800);
+    x.fillStyle = '#5A6B85';
+    x.font = '700 24px "Malgun Gothic",sans-serif';
+    x.fillText('클리너는 클위너!', 360, 850);
+    return c;
+  }
+  certBtn.addEventListener('click', () => {
+    const c = buildCert();
+    const showFallback = () => {           // 클립보드 미지원 → 길게 눌러 저장
+      const ov = document.createElement('div');
+      ov.id = 'certOverlay';
+      const img = new Image();
+      img.src = c.toDataURL('image/png');
+      const pp = document.createElement('p');
+      pp.textContent = '이미지를 길게 눌러 저장한 뒤 카카오톡으로 보내주세요 (탭하면 닫힘)';
+      ov.appendChild(img); ov.appendChild(pp);
+      ov.addEventListener('click', () => ov.remove());
+      document.getElementById('frame').appendChild(ov);
+    };
+    try {
+      const item = new ClipboardItem({ 'image/png': new Promise(res => c.toBlob(res, 'image/png')) });
+      navigator.clipboard.write([item]).then(() => {
+        certBtn.textContent = '✅ 복사됨! 카톡에 붙여넣기';
+      }).catch(showFallback);
+    } catch (e) { showFallback(); }
   });
   function begin() {
     audio();
@@ -988,7 +1071,8 @@
     document.getElementById('stCKill').textContent = kills;
     document.getElementById('stCLv').textContent = level;
     document.getElementById('clearCode').textContent = CODES[Math.floor(Math.random() * CODES.length)];
-    kakaoBtn.textContent = '💬 카카오톡으로 코드 보내기';
+    kakaoBtn.textContent = '💬 카카오톡 전송';
+    certBtn.textContent = '📸 인증 이미지 복사';
     clearScreen.classList.remove('hidden');
   }
 
