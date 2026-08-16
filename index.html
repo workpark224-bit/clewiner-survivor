@@ -60,15 +60,17 @@
   h2{font-size:22px;font-weight:900;letter-spacing:-.01em}
   .howto{
     display:flex;flex-direction:column;gap:8px;
-    font-size:14px;font-weight:500;color:var(--ink-soft);
-    background:var(--white);border-radius:14px;padding:14px 18px;
+    font-size:clamp(12px,3.4vw,14px);font-weight:500;color:var(--ink-soft);
+    background:var(--white);border-radius:14px;padding:13px 16px;
     box-shadow:0 4px 14px rgba(23,35,61,.08);
+    word-break:keep-all;line-height:1.55;max-width:330px;
   }
   .howto b{color:var(--ink);font-weight:700}
   .dialogue{
     font-size:16px;font-weight:700;color:var(--ink);
     background:var(--white);border-radius:999px;padding:10px 20px;
     box-shadow:0 4px 14px rgba(23,35,61,.08);
+    word-break:keep-all;
   }
   .stats{display:flex;gap:22px;font-variant-numeric:tabular-nums}
   .stats .col .big{font-size:34px;font-weight:900;line-height:1.1;letter-spacing:-.02em}
@@ -90,10 +92,11 @@
     background:var(--white);border:2px dashed var(--red);border-radius:12px;
     padding:10px 24px;font-variant-numeric:tabular-nums;color:var(--red);
   }
-  .fine{font-size:11.5px;font-weight:500;color:var(--ink-soft);line-height:1.6;max-width:320px}
+  .fine{font-size:11.5px;font-weight:500;color:var(--ink-soft);line-height:1.6;max-width:320px;word-break:keep-all}
   .evt{
-    font-size:13px;font-weight:700;color:var(--red);
+    font-size:clamp(11.5px,3.2vw,13px);font-weight:700;color:var(--red);
     background:#FBEBEC;border-radius:10px;padding:10px 16px;line-height:1.6;max-width:320px;
+    word-break:keep-all;
   }
   .shoplink{
     font-size:12.5px;font-weight:700;color:var(--ink-soft);
@@ -331,6 +334,7 @@
     { name: '진한 세제', desc: '던지는 붓 한 방이 더 아파요', max: 5, apply: () => w.dmg++ },
     { name: '회전 붓', desc: '주위를 도는 붓 +1 — 스치면 콕콕 견제', max: 2, apply: () => w.brushes++ },
     { name: '스피드 업', desc: '이동 속도 +15%', max: 4, apply: () => p.speed *= 1.15 },
+    { name: '방울 자석', desc: '경험치 방울을 멀리서도 끌어와요', max: 4, apply: () => p.magnet += 45 },
     { name: '튼튼한 용기', desc: '최대 체력 +1, 체력 1 회복', max: 3, apply: () => { p.maxHp++; p.hp = Math.min(p.maxHp, p.hp + 1); } },
     { name: '관통 붓', desc: '붓이 적을 뚫고 지나가요', max: 3, apply: () => w.pierce++ },
   ];
