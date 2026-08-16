@@ -443,7 +443,7 @@
   let state = 'start';
   let p, w, enemies, bullets, gems, parts, shots, puddles, t, kills, level, xp, xpNeed;
   let roundNum, phase, queue, pendingLevels, clearTimer, introTimer, lvFlash;
-  let spawnAt, bossWarn, shake, cleared, bossPending;
+  let spawnAt, bossWarn, shake, cleared, bossPending, wallInset;
   let bestRound = +(localStorage.getItem('cw-sv-best-round') || 0);
 
   function reset() {
@@ -455,7 +455,7 @@
     t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5;
     roundNum = 0; phase = 'fight'; queue = []; pendingLevels = 0;
     clearTimer = 0; introTimer = 0; lvFlash = 0;
-    spawnAt = 0; bossWarn = 0; shake = 0; cleared = false; bossPending = false;
+    spawnAt = 0; bossWarn = 0; shake = 0; cleared = false; bossPending = false; wallInset = 0;
     UPS.forEach(u => u.lvl = 0);
   }
 
@@ -713,6 +713,13 @@
       wob: rnd(0, 6.28), flash: 0, brushCd: 0, boss: false });
     enemies.push(m);
   }
+  function sporeRing(x, y, offset) {       // 360도 포자 폭발
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * 6.28 + offset;
+      shots.push({ x, y, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150,
+        r: 8, life: 4.5, c: '#5B7A4C' });
+    }
+  }
   function killMinions() {                 // 보스가 쓰러지면 부하도 함께 소멸
     for (let i = enemies.length - 1; i >= 0; i--) {
       if (enemies[i].minion) {
@@ -782,8 +789,25 @@
     p.y += p.vy;
     if (Math.abs(p.vx) > .3) p.face = p.vx < 0 ? -1 : 1;
     p.tilt = (wantX || p.slick > 0) ? Math.max(-.25, Math.min(.25, p.vx * .05)) : p.tilt * .8;
-    p.x = Math.max(p.r, Math.min(W - p.r, p.x));
-    p.y = Math.max(p.r + 60, Math.min(H - p.r, p.y));
+
+    // 곰팡이 대왕 — 곰팡이 벽이 전장을 조여온다
+    const finalBoss = enemies.find(x => x.boss && !x.isSplit && x.idx === 3);
+    if (finalBoss) wallInset = Math.min(90, wallInset + (finalBoss.phase2 ? 14 : 7) * dt);
+    else if (wallInset > 0) wallInset = Math.max(0, wallInset - 60 * dt);
+    if (wallInset > 0 && p.iframe <= 0 &&
+        (p.x - p.r < wallInset || p.x + p.r > W - wallInset ||
+         p.y - p.r < wallInset || p.y + p.r > H - wallInset)) {
+      if (w.shieldCharges > 0) popShield();
+      else {
+        p.hp--;
+        p.iframe = 1;
+        shake = reduceMotion ? 0 : .5;
+        sfx.hurt();
+        if (p.hp <= 0) { gameOver(); return; }
+      }
+    }
+    p.x = Math.max(p.r + wallInset, Math.min(W - p.r - wallInset, p.x));
+    p.y = Math.max(p.r + Math.max(60, wallInset), Math.min(H - p.r - wallInset, p.y));
 
     // 라운드 진행
     if (introTimer > 0) introTimer -= dt;
@@ -865,7 +889,7 @@
         if (e.lunge > 0) { e.lunge -= dt; spd *= 1.9; }
       }
       // 2페이즈 전환 (체력 50%) — 1·2단계 보스
-      if (e.boss && !e.isSplit && !e.phase2 && e.idx <= 2 && e.hp <= e.maxHp * .5) {
+      if (e.boss && !e.isSplit && !e.phase2 && e.hp <= e.maxHp * .5) {
         e.phase2 = true;
         e.flash = .3;
         sfx.boss();
@@ -923,14 +947,15 @@
 
       // 곰팡이 대왕 — 360도 포자 폭발 (1초 부풀며 예고 후 12발)
       if (e.boss && !e.isSplit && e.idx === 3) {
+        if (e.burst2 > 0) {                // 2페이즈 — 0.6초 뒤 각도 어긋난 2발째
+          e.burst2 -= dt;
+          if (e.burst2 <= 0) sporeRing(e.x, e.y, .26);
+        }
         if (e.charging > 0) {
           e.charging -= dt;
           if (e.charging <= 0) {
-            for (let k = 0; k < 12; k++) {
-              const a = k / 12 * 6.28;
-              shots.push({ x: e.x, y: e.y, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150,
-                r: 8, life: 4.5, c: '#5B7A4C' });
-            }
+            sporeRing(e.x, e.y, 0);
+            if (e.phase2) e.burst2 = .6;
             sfx.boss();
             e.burstAt = 8;
           }
@@ -1381,6 +1406,17 @@
     cx.save();
     if (shake > 0) cx.translate(rnd(-5, 5) * shake, rnd(-5, 5) * shake);
     drawTiles();
+    // 조여오는 곰팡이 벽
+    if (wallInset > 0) {
+      cx.fillStyle = 'rgba(46,65,38,.85)';
+      cx.fillRect(0, 0, wallInset, H);
+      cx.fillRect(W - wallInset, 0, wallInset, H);
+      cx.fillRect(0, 0, W, wallInset);
+      cx.fillRect(0, H - wallInset, W, wallInset);
+      cx.strokeStyle = '#44603A';
+      cx.lineWidth = 6;
+      cx.strokeRect(wallInset, wallInset, W - wallInset * 2, H - wallInset * 2);
+    }
     // 물때 장판
     for (const pd of puddles) {
       cx.globalAlpha = Math.min(1, pd.life / 1.5) * .5;
