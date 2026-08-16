@@ -536,7 +536,7 @@
         if (e.minionAt <= 0 && enemies.length < 110) {
           e.minionAt = 4.5;
           for (let k = 0; k < 4; k++) {
-            const m = { type: 'mold', r: 16, hp: 2 * roundMul(), speed: 70, xp: 1,
+            const m = { type: 'mold', r: 16, hp: 2 * roundMul(), speed: 70, xp: 0,   // 부하는 경험치 없음 — 보스전 파밍 방지
               x: e.x + rnd(-40, 40), y: e.y + rnd(-40, 40),
               wob: rnd(0, 6.28), flash: 0, brushCd: 0, boss: false };
             m.maxHp = m.hp;
@@ -634,7 +634,7 @@
           gems.push({ x: e.x + rnd(-40, 40), y: e.y + rnd(-40, 40), v: 4 });
         shake = reduceMotion ? 0 : .7;
         if (e.idx === 3 && !cleared) { cleared = true; openClear(); }
-      } else {
+      } else if (e.xp > 0) {
         gems.push({ x: e.x, y: e.y, v: e.xp });
       }
     }
