@@ -557,7 +557,7 @@
       }
     } else if (phase === 'clear') {
       clearTimer -= dt;
-      if (clearTimer <= 0 && gems.length === 0) {
+      if (clearTimer <= 0) {              // 남은 방울은 다음 라운드로 이월
         if (pendingLevels > 0) openLevelUp();
         else startRound(roundNum + 1);
       }
@@ -1004,11 +1004,6 @@
       cx.font = '900 34px "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif';
       cx.textAlign = 'center';
       cx.fillText('라운드 클리어!', W / 2, H * .42);
-      if (gems.length > 0) {
-        cx.font = '700 17px "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif';
-        cx.fillStyle = '#5A6B85';
-        cx.fillText('남은 방울을 주워 모으세요 (' + gems.length + ')', W / 2, H * .42 + 34);
-      }
     }
     // 보스 경고
     if (bossWarn > 0 && Math.floor(bossWarn * 5) % 2 === 0) {
