@@ -312,8 +312,8 @@
   let bestRound = +(localStorage.getItem('cw-sv-best-round') || 0);
 
   function reset() {
-    p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 175, magnet: 90, iframe: 0, tilt: 0, face: 1 };
-    w = { cd: .75, timer: 0, count: 1, dmg: 1, pierce: 0, brushes: 0, brushAngle: 0 };
+    p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 205, magnet: 90, iframe: 0, tilt: 0, face: 1 };
+    w = { cd: .7, timer: 0, count: 1, dmg: 1, pierce: 0, brushes: 0, brushAngle: 0 };
     enemies = []; bullets = []; gems = []; parts = []; shots = [];
     t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5;
     roundNum = 0; phase = 'fight'; queue = []; pendingLevels = 0;
@@ -336,11 +336,11 @@
       const extra = 6 + n;                 // 보스전에도 잡몹이 섞여 나온다
       for (let i = 0; i < extra; i++) queue.push(Math.random() < .5 ? 'hair' : 'mold');
     } else {
-      const total = 9 + n * 2;
+      const total = 8 + n * 2;
       for (let i = 0; i < total; i++) {
         const r = Math.random();
-        if (n >= 3 && r < .18) queue.push('scale');
-        else if (n >= 2 && r < .48) queue.push('hair');
+        if (n >= 4 && r < .18) queue.push('scale');
+        else if (n >= 3 && r < .45) queue.push('hair');
         else queue.push('mold');
       }
     }
@@ -391,14 +391,22 @@
   const keys = {};
   addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
   addEventListener('keyup',   e => keys[e.key.toLowerCase()] = false);
-  let ptr = null;
+  // 드래그 = 손가락이 움직인 만큼 즉시 이동 (따라오기 방식보다 반응이 즉각적)
+  let lastPt = null;
+  const drag = { dx: 0, dy: 0 };
   function toGame(e) {
     const r = cv.getBoundingClientRect();
     return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
   }
-  cv.addEventListener('pointerdown', e => ptr = toGame(e));
-  addEventListener('pointermove', e => { if (ptr) ptr = toGame(e); });
-  addEventListener('pointerup', () => ptr = null);
+  cv.addEventListener('pointerdown', e => lastPt = toGame(e));
+  addEventListener('pointermove', e => {
+    if (!lastPt) return;
+    const q = toGame(e);
+    drag.dx += q.x - lastPt.x;
+    drag.dy += q.y - lastPt.y;
+    lastPt = q;
+  });
+  addEventListener('pointerup', () => lastPt = null);
 
   document.getElementById('startBtn').addEventListener('click', begin);
   document.getElementById('retryBtn').addEventListener('click', begin);
@@ -443,7 +451,7 @@
     pauseScreen.classList.add('hidden');
     state = 'play';
   }
-  function scrubKeys() { for (const k in keys) keys[k] = false; ptr = null; }
+  function scrubKeys() { for (const k in keys) keys[k] = false; lastPt = null; drag.dx = 0; drag.dy = 0; }
   pauseBtn.addEventListener('click', pauseGame);
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('pauseRestart').addEventListener('click', begin);
@@ -469,9 +477,9 @@
     if (type === 'scale') {        // 물때 — 느리고 단단
       e = { type, r: 26, hp: 6 * mul, speed: rnd(30, 42), xp: 3 };
     } else if (type === 'hair') {  // 머리카락 — 빠르고 약함
-      e = { type, r: 13, hp: 1 * mul, speed: rnd(105, 140), xp: 1 };
-    } else {                       // 곰팡이 — 기본
-      e = { type, r: rnd(16, 21), hp: 2 * mul, speed: rnd(60, 78), xp: 1 };
+      e = { type, r: 13, hp: 1 * mul, speed: rnd(100, 130), xp: 1 };
+    } else {                       // 곰팡이 — 기본, 라운드가 갈수록 가속
+      e = { type, r: rnd(16, 21), hp: 2 * mul, speed: rnd(50, 64) + Math.min(14, roundNum), xp: 1 };
     }
     Object.assign(e, edgeSpawn(e.r), { maxHp: e.hp, wob: rnd(0, 6.28), flash: 0, brushCd: 0, boss: false });
     enemies.push(e);
@@ -499,23 +507,29 @@
     if (bossWarn > 0) bossWarn -= dt;
     if (shake > 0) shake -= dt * 2;
 
-    // 이동
+    // 이동 — 키보드
     let mx = 0, my = 0;
     if (keys.arrowleft || keys.a) mx -= 1;
     if (keys.arrowright || keys.d) mx += 1;
     if (keys.arrowup || keys.w) my -= 1;
     if (keys.arrowdown || keys.s) my += 1;
-    if (ptr) {
-      const dx = ptr.x - p.x, dy = ptr.y - p.y, d = Math.hypot(dx, dy);
-      if (d > 8) { mx = dx / d; my = dy / d; }
-    }
     const ml = Math.hypot(mx, my);
     if (ml > 0) {
       p.x += mx / ml * p.speed * dt;
       p.y += my / ml * p.speed * dt;
       p.face = mx < 0 ? -1 : (mx > 0 ? 1 : p.face);
+      p.tilt = Math.max(-.25, Math.min(.25, mx * .25));
     }
-    p.tilt = ml > 0 ? Math.max(-.25, Math.min(.25, mx * .25)) : 0;
+    // 이동 — 드래그 (움직인 만큼 1.25배 증폭 적용, 즉각 반응)
+    if (drag.dx !== 0 || drag.dy !== 0) {
+      p.x += drag.dx * 1.25;
+      p.y += drag.dy * 1.25;
+      if (Math.abs(drag.dx) > .5) p.face = drag.dx < 0 ? -1 : 1;
+      p.tilt = Math.max(-.25, Math.min(.25, drag.dx * .04));
+      drag.dx = 0; drag.dy = 0;
+    } else if (ml === 0) {
+      p.tilt *= .8;
+    }
     p.x = Math.max(p.r, Math.min(W - p.r, p.x));
     p.y = Math.max(p.r + 60, Math.min(H - p.r, p.y));
 
@@ -527,7 +541,7 @@
       if (spawnAt <= 0 && queue.length) {
         const batch = 1 + Math.floor(roundNum / 5);
         for (let k = 0; k < batch && queue.length; k++) spawnType(queue.pop());
-        spawnAt = Math.max(.25, .7 - roundNum * .025);
+        spawnAt = Math.max(.25, .8 - roundNum * .028);
       }
       if (!queue.length && enemies.length === 0) {
         phase = 'clear';
@@ -590,7 +604,7 @@
         if (e.lungeAt === undefined) e.lungeAt = rnd(1, 2.5);
         e.lungeAt -= dt;
         if (e.lungeAt <= 0) { e.lunge = .5; e.lungeAt = rnd(2.5, 4); }
-        if (e.lunge > 0) { e.lunge -= dt; spd *= 2.2; }
+        if (e.lunge > 0) { e.lunge -= dt; spd *= 1.9; }
       }
       if (e.boss && e.hp < e.maxHp * .3) spd *= 1.45;   // 격노
       e.x += dx / d * spd * dt;
@@ -644,7 +658,7 @@
       // 접촉 피해 — 보스 몸통은 2칸
       if (p.iframe <= 0 && d < e.r + p.r - 6) {
         p.hp -= e.boss ? 2 : 1;
-        p.iframe = .9;
+        p.iframe = 1;
         shake = reduceMotion ? 0 : .5;
         sfx.hurt();
         if (p.hp <= 0) { gameOver(); return; }
@@ -659,7 +673,7 @@
       if (p.iframe <= 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r - 8) {
         shots.splice(i, 1);
         p.hp--;
-        p.iframe = .9;
+        p.iframe = 1;
         shake = reduceMotion ? 0 : .5;
         sfx.hurt();
         if (p.hp <= 0) { gameOver(); return; }
