@@ -95,6 +95,12 @@
     padding:8px 18px;text-decoration:none;
   }
   .shoplink b{color:var(--red)}
+  button.kakao{
+    background:#FEE500;color:#191919;
+    box-shadow:0 6px 16px rgba(0,0,0,.15);
+    font-size:15px;padding:12px 32px;
+  }
+  button.kakao:active{background:#F2D900}
   /* 업그레이드 카드 */
   #cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px}
   .card{
@@ -142,6 +148,7 @@
     <div class="code" id="clearCode">CW-000-000</div>
     <div class="fine" id="clearGuide"></div>
     <div class="fine hidden" id="clearLegal">본 이벤트는 Instagram과 무관하며 Instagram의 후원·보증·운영을 받지 않습니다.</div>
+    <button class="kakao hidden" id="kakaoBtn">💬 카카오톡으로 코드 보내기</button>
     <button id="contBtn">계속 살아남기</button>
     <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">현실 곰팡이는 붓으로 <b>곰팡이제거제 →</b></a>
   </div>
@@ -186,6 +193,9 @@
     endText: '8월 31일',
     end: new Date('2026-08-31T23:59:59+09:00').getTime(),
     limit: 30,
+    // 클위너 카카오톡 채널 채팅 주소 (예: 'http://pf.kakao.com/_abcDE/chat')
+    // 비워두면 카카오 버튼이 숨겨진다
+    kakaoChat: '',
   };
   const evtActive = Date.now() <= EVENT.end;
   {
@@ -257,7 +267,7 @@
     UPS.forEach(u => u.lvl = 0);
   }
 
-  function roundMul() { return 1 + (roundNum - 1) * .35; }
+  function roundMul() { return 1 + (roundNum - 1) * .3; }
 
   function startRound(n) {
     roundNum = n;
@@ -271,11 +281,11 @@
       const extra = 6 + n;                 // 보스전에도 잡몹이 섞여 나온다
       for (let i = 0; i < extra; i++) queue.push(Math.random() < .5 ? 'hair' : 'mold');
     } else {
-      const total = 9 + n * 3;
+      const total = 9 + n * 2;
       for (let i = 0; i < total; i++) {
         const r = Math.random();
-        if (n >= 3 && r < .22) queue.push('scale');
-        else if (n >= 2 && r < .5) queue.push('hair');
+        if (n >= 3 && r < .18) queue.push('scale');
+        else if (n >= 2 && r < .48) queue.push('hair');
         else queue.push('mold');
       }
     }
@@ -340,6 +350,19 @@
     clearScreen.classList.add('hidden');
     state = 'play';
   });
+  // 카카오톡 인증 — 코드를 복사해 주고 채널 채팅을 연다
+  const kakaoBtn = document.getElementById('kakaoBtn');
+  if (EVENT.kakaoChat && evtActive) kakaoBtn.classList.remove('hidden');
+  kakaoBtn.addEventListener('click', () => {
+    const code = document.getElementById('clearCode').textContent;
+    const go = () => window.open(EVENT.kakaoChat, '_blank');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(() => {
+        kakaoBtn.textContent = '✅ 코드 복사됨! 채팅창에 붙여넣기';
+        setTimeout(go, 400);
+      }).catch(go);
+    } else go();
+  });
   function begin() {
     audio();
     reset();
@@ -374,7 +397,7 @@
   }
   function spawnBoss(idx) {
     const name = BOSS_NAMES[(idx - 1) % 3];
-    const hp = 90 * Math.pow(2.2, idx - 1);
+    const hp = 130 * Math.pow(2.4, idx - 1);
     const e = {
       type: ['scale', 'pink', 'mold'][(idx - 1) % 3],
       boss: true, name, idx, r: 52, hp, maxHp: hp,
@@ -421,9 +444,9 @@
     if (phase === 'fight') {
       spawnAt -= dt;
       if (spawnAt <= 0 && queue.length) {
-        const batch = 1 + Math.floor(roundNum / 4);
+        const batch = 1 + Math.floor(roundNum / 5);
         for (let k = 0; k < batch && queue.length; k++) spawnType(queue.pop());
-        spawnAt = Math.max(.2, .7 - roundNum * .03);
+        spawnAt = Math.max(.25, .7 - roundNum * .025);
       }
       if (!queue.length && enemies.length === 0) {
         phase = 'clear';
@@ -497,11 +520,13 @@
         if (e.shotAt === undefined) e.shotAt = rnd(1.5, 3);
         e.shotAt -= dt;
         if (e.shotAt <= 0 && d > 90) {
-          e.shotAt = e.boss ? 3 : 4.5;
+          e.shotAt = e.boss ? 3 : 5.5;
           const a = Math.atan2(dy, dx);
           const sp = e.boss ? 165 : 140;
-          shots.push({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-            r: 8, life: 4.5, c: e.type === 'pink' ? '#D4728F' : (e.type === 'scale' ? '#8A906F' : '#5B7A4C') });
+          const angles = e.boss ? [a - .35, a, a + .35] : [a];   // 보스는 3갈래
+          for (const ang of angles)
+            shots.push({ x: e.x, y: e.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+              r: 8, life: 4.5, c: e.type === 'pink' ? '#D4728F' : (e.type === 'scale' ? '#8A906F' : '#5B7A4C') });
         }
       }
 
@@ -535,9 +560,9 @@
         }
       }
 
-      // 접촉 피해
+      // 접촉 피해 — 보스 몸통은 2칸
       if (p.iframe <= 0 && d < e.r + p.r - 6) {
-        p.hp--;
+        p.hp -= e.boss ? 2 : 1;
         p.iframe = .9;
         shake = reduceMotion ? 0 : .5;
         sfx.hurt();
@@ -640,6 +665,7 @@
     document.getElementById('stCKill').textContent = kills;
     document.getElementById('stCLv').textContent = level;
     document.getElementById('clearCode').textContent = CODES[Math.floor(Math.random() * CODES.length)];
+    kakaoBtn.textContent = '💬 카카오톡으로 코드 보내기';
     clearScreen.classList.remove('hidden');
   }
 
