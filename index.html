@@ -670,9 +670,8 @@
     for (let i = gems.length - 1; i >= 0; i--) {
       const g = gems[i];
       const d = dist(g, p);
-      const mr = phase === 'clear' ? 4000 : p.magnet;   // 라운드 끝나면 전부 끌어모음
-      if (d < mr) {
-        const pull = phase === 'clear' ? 750 : (1 - d / p.magnet) * 520 + 90;
+      if (d < p.magnet) {               // 라운드가 끝나도 방울은 제자리 — 직접 주워 모은다
+        const pull = (1 - d / p.magnet) * 520 + 90;
         g.x += (p.x - g.x) / d * pull * dt;
         g.y += (p.y - g.y) / d * pull * dt;
       }
@@ -957,6 +956,11 @@
       cx.font = '900 34px "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif';
       cx.textAlign = 'center';
       cx.fillText('라운드 클리어!', W / 2, H * .42);
+      if (gems.length > 0) {
+        cx.font = '700 17px "Pretendard Variable",Pretendard,"Malgun Gothic",sans-serif';
+        cx.fillStyle = '#5A6B85';
+        cx.fillText('남은 방울을 주워 모으세요 (' + gems.length + ')', W / 2, H * .42 + 34);
+      }
     }
     // 보스 경고
     if (bossWarn > 0 && Math.floor(bossWarn * 5) % 2 === 0) {
