@@ -313,7 +313,8 @@
 
   function reset() {
     p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 205, magnet: 90, iframe: 0, tilt: 0, face: 1 };
-    w = { cd: .7, timer: 0, count: 1, dmg: 1, pierce: 0, brushes: 0, brushAngle: 0 };
+    w = { cd: .7, timer: 0, count: 1, dmg: 1, pierce: 0, brushes: 0, brushAngle: 0,
+      shieldLv: 0, shieldReady: false, shieldTimer: 0 };
     enemies = []; bullets = []; gems = []; parts = []; shots = [];
     t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5;
     roundNum = 0; phase = 'fight'; queue = []; pendingLevels = 0;
@@ -352,7 +353,7 @@
     { name: '빠른 손놀림', desc: '붓 던지는 속도가 빨라져요', max: 4, apply: () => w.cd *= .85 },
     { name: '진한 세제', desc: '던지는 붓 한 방이 더 아파요', max: 5, apply: () => w.dmg++ },
     { name: '회전 붓', desc: '주위를 도는 붓 +1 — 스치면 콕콕 견제', max: 2, apply: () => w.brushes++ },
-    { name: '스피드 업', desc: '이동 속도 +15%', max: 4, apply: () => p.speed *= 1.15 },
+    { name: '거품 방패', desc: '피격 1회를 막는 거품 막 — 레벨업마다 충전이 빨라져요', max: 3, apply: () => { w.shieldLv++; w.shieldReady = true; w.shieldTimer = 0; } },
     { name: '방울 자석', desc: '경험치 방울을 멀리서도 끌어와요', max: 4, apply: () => p.magnet += 45 },
     { name: '튼튼한 용기', desc: '최대 체력 +1, 체력 1 회복', max: 3, apply: () => { p.maxHp++; p.hp = Math.min(p.maxHp, p.hp + 1); } },
     { name: '관통 붓', desc: '붓이 적을 뚫고 지나가요', max: 3, apply: () => w.pierce++ },
@@ -507,6 +508,12 @@
     if (bossWarn > 0) bossWarn -= dt;
     if (shake > 0) shake -= dt * 2;
 
+    // 거품 방패 재충전 (12·9·6초)
+    if (w.shieldLv > 0 && !w.shieldReady) {
+      w.shieldTimer -= dt;
+      if (w.shieldTimer <= 0) { w.shieldReady = true; sfx.ding(); }
+    }
+
     // 이동 — 키보드
     let mx = 0, my = 0;
     if (keys.arrowleft || keys.a) mx -= 1;
@@ -655,13 +662,17 @@
         }
       }
 
-      // 접촉 피해 — 보스 몸통은 2칸
+      // 접촉 피해 — 보스 몸통은 2칸, 거품 방패가 있으면 1회 무효
       if (p.iframe <= 0 && d < e.r + p.r - 6) {
-        p.hp -= e.boss ? 2 : 1;
-        p.iframe = 1;
-        shake = reduceMotion ? 0 : .5;
-        sfx.hurt();
-        if (p.hp <= 0) { gameOver(); return; }
+        if (w.shieldReady) {
+          popShield();
+        } else {
+          p.hp -= e.boss ? 2 : 1;
+          p.iframe = 1;
+          shake = reduceMotion ? 0 : .5;
+          sfx.hurt();
+          if (p.hp <= 0) { gameOver(); return; }
+        }
       }
     }
 
@@ -672,11 +683,15 @@
       if (s.life <= 0 || s.x < -20 || s.x > W + 20 || s.y < -20 || s.y > H + 20) { shots.splice(i, 1); continue; }
       if (p.iframe <= 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r - 8) {
         shots.splice(i, 1);
-        p.hp--;
-        p.iframe = 1;
-        shake = reduceMotion ? 0 : .5;
-        sfx.hurt();
-        if (p.hp <= 0) { gameOver(); return; }
+        if (w.shieldReady) {
+          popShield();
+        } else {
+          p.hp--;
+          p.iframe = 1;
+          shake = reduceMotion ? 0 : .5;
+          sfx.hurt();
+          if (p.hp <= 0) { gameOver(); return; }
+        }
       }
     }
 
@@ -712,6 +727,14 @@
     }
   }
 
+  function popShield() {
+    w.shieldReady = false;
+    w.shieldTimer = [12, 9, 6][Math.min(2, w.shieldLv - 1)];
+    p.iframe = 1;
+    burst(p.x, p.y, 'bubble', 16);
+    beep(700, .18, 'sine', .14, 280);
+  }
+
   function hurtEnemy(idx, dmg, kx, ky) {
     const e = enemies[idx];
     e.hp -= dmg;
@@ -726,6 +749,7 @@
       if (e.boss) {
         for (let k = 0; k < 8; k++)
           gems.push({ x: e.x + rnd(-40, 40), y: e.y + rnd(-40, 40), v: 4 });
+        p.hp = Math.min(p.maxHp, p.hp + 1);   // 대왕 격파 보상 — 하트 1 회복
         shake = reduceMotion ? 0 : .7;
         if (e.idx === 3 && !cleared) { cleared = true; openClear(); }
       } else if (e.xp > 0) {
@@ -838,6 +862,16 @@
     cx.stroke();
     cx.restore();
 
+    // 거품 방패
+    if (w.shieldReady) {
+      cx.strokeStyle = 'rgba(120,180,205,.85)';
+      cx.lineWidth = 2.5;
+      cx.fillStyle = 'rgba(191,227,240,.16)';
+      cx.beginPath(); cx.arc(p.x, p.y, 46 + Math.sin(t * 4) * 2, 0, 6.28); cx.fill(); cx.stroke();
+      cx.strokeStyle = 'rgba(255,255,255,.9)';
+      cx.lineWidth = 2;
+      cx.beginPath(); cx.arc(p.x - 15, p.y - 17, 13, -2.4, -1.1); cx.stroke();
+    }
     // 회전 붓
     for (let k = 0; k < w.brushes; k++) {
       const a = w.brushAngle + k * 6.28 / w.brushes;
