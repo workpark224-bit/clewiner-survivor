@@ -190,6 +190,7 @@
 
   // ---- 이벤트 설정 (기간·수량은 여기만 고치면 됨) ----
   const EVENT = {
+    live: false,        // ⬅ 이벤트 정식 시작 때 true로 — false면 이벤트 문구 전체 숨김 (지인 테스트용)
     endText: '8월 31일',
     end: new Date('2026-08-31T23:59:59+09:00').getTime(),
     limit: 30,
@@ -197,7 +198,7 @@
     // 비워두면 카카오 버튼이 숨겨진다
     kakaoChat: '',
   };
-  const evtActive = Date.now() <= EVENT.end;
+  const evtActive = EVENT.live && Date.now() <= EVENT.end;
   {
     const banner = document.getElementById('evtBanner');
     const guide = document.getElementById('clearGuide');
