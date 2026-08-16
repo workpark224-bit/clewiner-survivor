@@ -773,8 +773,12 @@
       wantY += my / ml * p.speed * dt;
     }
     if (drag.dx !== 0 || drag.dy !== 0) {
-      wantX += drag.dx * 1.25;
-      wantY += drag.dy * 1.25;
+      let dxs = drag.dx * 1.25, dys = drag.dy * 1.25;
+      const mag = Math.hypot(dxs, dys);
+      const cap = p.speed * dt;           // 빨리 그어도 최대 속도는 고정
+      if (mag > cap) { dxs = dxs / mag * cap; dys = dys / mag * cap; }
+      wantX += dxs;
+      wantY += dys;
       drag.dx = 0; drag.dy = 0;
     }
     if (p.slick > 0) {                    // 물때 장판 — 관성이 생기고 조작이 30%만 먹힘
