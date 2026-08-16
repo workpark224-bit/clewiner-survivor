@@ -864,8 +864,44 @@
         if (e.lungeAt <= 0) { e.lunge = .5; e.lungeAt = rnd(2.5, 4); }
         if (e.lunge > 0) { e.lunge -= dt; spd *= 1.9; }
       }
+      // 2페이즈 전환 (체력 50%) — 1·2단계 보스
+      if (e.boss && !e.isSplit && !e.phase2 && e.idx <= 2 && e.hp <= e.maxHp * .5) {
+        e.phase2 = true;
+        e.flash = .3;
+        sfx.boss();
+        shake = reduceMotion ? 0 : .5;
+        if (e.idx === 1) {                 // 물때 대왕 — 장판을 사방에 살포
+          for (let k = 0; k < 8; k++)
+            puddles.push({ x: rnd(60, W - 60), y: rnd(150, H - 80), life: 9 });
+          e.puddleAt = 0;
+        }
+        if (e.idx === 2) e.dashAt = 2;     // 핑크 얼룩 대왕 — 돌진 개시
+      }
+      // 핑크 얼룩 대왕 돌진 (2페이즈): 조준 1초 → 돌진 → 잠깐 무방비
+      if (e.boss && !e.isSplit && e.idx === 2 && e.phase2) {
+        if (e.aiming > 0) {
+          e.aiming -= dt;
+          if (e.aiming <= 0) {
+            const a2 = Math.atan2(p.y - e.y, p.x - e.x);
+            e.dashVx = Math.cos(a2) * 520;
+            e.dashVy = Math.sin(a2) * 520;
+            e.dashT = .45;
+          }
+        } else if (e.dashT > 0) {
+          e.dashT -= dt;
+          e.x = Math.max(e.r, Math.min(W - e.r, e.x + e.dashVx * dt));
+          e.y = Math.max(e.r + 60, Math.min(H - e.r, e.y + e.dashVy * dt));
+          if (e.dashT <= 0) e.rest = 1;
+        } else if (e.rest > 0) {
+          e.rest -= dt;
+        } else {
+          e.dashAt = (e.dashAt === undefined ? 3 : e.dashAt) - dt;
+          if (e.dashAt <= 0) { e.aiming = 1; e.dashAt = 5; }
+        }
+      }
       if (e.boss && e.hp < e.maxHp * .3) spd *= 1.45;   // 격노
       if (e.charging > 0) spd = 0;                       // 차징 중엔 정지
+      if (e.aiming > 0 || e.dashT > 0 || e.rest > 0) spd = 0;   // 돌진 사이클 중엔 추격 정지
       e.x += dx / d * spd * dt;
       e.y += dy / d * spd * dt;
 
@@ -910,15 +946,16 @@
         if (e.minionAt <= 0 && enemies.length < 110) {
           const tier = Math.min(3, e.idx);
           e.minionAt = [5, 4.5, 4][tier - 1];
+          if (e.phase2 && e.idx === 2) e.minionAt *= .5;   // 2페이즈 핑크 — 소환 2배 가속
           const comp = [['mold', 'mold', 'mold', 'mold'],
                         ['mold', 'mold', 'hair', 'hair'],
                         ['mold', 'mold', 'hair', 'hair', 'scale']][tier - 1];
           for (const mt of comp) spawnMinion(mt, e.x + rnd(-40, 40), e.y + rnd(-40, 40));
         }
-        // 물때 대왕 — 지나간 자리에 미끌 장판
+        // 물때 대왕 — 지나간 자리에 미끌 장판 (2페이즈는 2배 촘촘)
         if (e.type === 'scale') {
           e.puddleAt -= dt;
-          if (e.puddleAt <= 0) { puddles.push({ x: e.x, y: e.y, life: 7 }); e.puddleAt = .9; }
+          if (e.puddleAt <= 0) { puddles.push({ x: e.x, y: e.y, life: 7 }); e.puddleAt = e.phase2 ? .45 : .9; }
         }
       }
 
@@ -1239,6 +1276,19 @@
       }
     }
     cx.restore();
+    // 돌진 조준선 예고
+    if (e.aiming > 0) {
+      cx.save();
+      cx.strokeStyle = 'rgba(207,51,57,' + (.3 + (1 - e.aiming) * .5).toFixed(2) + ')';
+      cx.lineWidth = 4;
+      cx.setLineDash([12, 8]);
+      cx.beginPath();
+      cx.moveTo(e.x, e.y);
+      cx.lineTo(p.x, p.y);
+      cx.stroke();
+      cx.setLineDash([]);
+      cx.restore();
+    }
     // 포자 폭발 차징 예고
     if (e.charging > 0) {
       const pr = 1 - e.charging;
