@@ -117,6 +117,16 @@
   .coupon .cp-t{font-size:12px;font-weight:700;color:var(--ink-soft)}
   .coupon .cp-c{font-size:24px;font-weight:900;letter-spacing:.08em;color:var(--red)}
   .coupon .cp-s{font-size:11px;font-weight:600;color:var(--ink-soft)}
+  .pausebtn{
+    position:absolute;top:11.5%;right:3%;
+    width:38px;height:38px;border-radius:50%;padding:0;
+    background:rgba(255,255,255,.92);color:var(--ink);
+    font-size:13px;font-weight:900;letter-spacing:1px;
+    border:1px solid rgba(23,35,61,.15);
+    box-shadow:0 3px 10px rgba(23,35,61,.15);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .pausebtn:active{background:#E8EEF1;transform:scale(.94)}
   /* 업그레이드 카드 */
   #cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px}
   .card{
@@ -150,6 +160,15 @@
     <div class="evt hidden" id="evtBanner"></div>
     <button id="startBtn">출동!</button>
     <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">이 게임의 주인공 <b>곰팡이제거제 →</b></a>
+  </div>
+
+  <button class="pausebtn hidden" id="pauseBtn" aria-label="일시정지">❚❚</button>
+
+  <div class="overlay hidden" id="pauseScreen">
+    <div class="eyebrow">PAUSE</div>
+    <div class="dialogue">잠깐 숨 고르는 중…</div>
+    <button id="resumeBtn">이어하기</button>
+    <div class="tag" id="pauseRestart" style="cursor:pointer;text-decoration:underline">처음부터 다시</div>
   </div>
 
   <div class="overlay hidden" id="clearScreen">
@@ -408,7 +427,32 @@
     startScreen.classList.add('hidden');
     overScreen.classList.add('hidden');
     clearScreen.classList.add('hidden');
+    pauseScreen.classList.add('hidden');
   }
+
+  // 일시정지
+  const pauseScreen = document.getElementById('pauseScreen');
+  const pauseBtn = document.getElementById('pauseBtn');
+  function pauseGame() {
+    if (state !== 'play') return;
+    state = 'pause';
+    scrubKeys();
+    pauseScreen.classList.remove('hidden');
+  }
+  function resumeGame() {
+    pauseScreen.classList.add('hidden');
+    state = 'play';
+  }
+  function scrubKeys() { for (const k in keys) keys[k] = false; ptr = null; }
+  pauseBtn.addEventListener('click', pauseGame);
+  document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+  document.getElementById('pauseRestart').addEventListener('click', begin);
+  addEventListener('keydown', e => {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      if (state === 'play') pauseGame();
+      else if (state === 'pause') resumeGame();
+    }
+  });
 
   // ---- 적 ----
   function edgeSpawn(r) {
@@ -982,8 +1026,9 @@
       }
       cx.globalAlpha = 1;
     }
-    if (state === 'play' || state === 'levelup' || state === 'clear') drawHUD();
+    if (state === 'play' || state === 'levelup' || state === 'clear' || state === 'pause') drawHUD();
     cx.restore();
+    pauseBtn.classList.toggle('hidden', state !== 'play');
     requestAnimationFrame(frame);
   }
   reset();
