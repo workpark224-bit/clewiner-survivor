@@ -54,6 +54,8 @@
     backdrop-filter:blur(3px);
   }
   .overlay.hidden{display:none}
+  .overlay{overflow-y:auto;justify-content:flex-start}
+  .overlay::before,.overlay::after{content:'';margin:auto;flex-shrink:0}
   .eyebrow{font-size:12px;font-weight:700;letter-spacing:.22em;color:var(--ink-soft)}
   h1{font-size:clamp(28px,8vw,40px);font-weight:900;line-height:1.2;
     text-wrap:balance;letter-spacing:-.02em}
@@ -235,6 +237,18 @@
   const cv = document.getElementById('game');
   const cx = cv.getContext('2d');
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 구형 브라우저(iOS 15 이하 등) roundRect 폴리필 — 없으면 렌더링이 통째로 죽는다
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w2, h2, r) {
+      this.moveTo(x + r, y);
+      this.arcTo(x + w2, y, x + w2, y + h2, r);
+      this.arcTo(x + w2, y + h2, x, y + h2, r);
+      this.arcTo(x, y + h2, x, y, r);
+      this.arcTo(x, y, x + w2, y, r);
+      this.closePath();
+      return this;
+    };
+  }
 
   const startScreen = document.getElementById('startScreen');
   const levelScreen = document.getElementById('levelScreen');
@@ -463,6 +477,10 @@
 
   function startRound(n) {
     roundNum = n;
+    if (n > bestRound) {                   // 도달 즉시 기록 — 클리어 후 이탈해도 유실 없음
+      bestRound = n;
+      try { localStorage.setItem('cw-sv-best-round', bestRound); } catch (e) {}
+    }
     phase = 'fight';
     introTimer = 1.3;
     spawnAt = .6;
@@ -631,6 +649,7 @@
     } catch (e) { showFallback(); }
   });
   function begin() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // 스페이스바 재시작 사고 방지
     audio();
     reset();
     startRound(1);
@@ -652,6 +671,7 @@
     pauseScreen.classList.remove('hidden');
   }
   function resumeGame() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     pauseScreen.classList.add('hidden');
     state = 'play';
     musicResume();
@@ -1005,6 +1025,7 @@
         }
       }
 
+      if (enemies[i] !== e) continue;      // 회전 붓 등으로 방금 죽은 적의 잔상 처리 방지
       // 접촉 피해 — 보스 몸통은 2칸(분열체는 1칸), 거품 방패가 있으면 1회 무효
       if (p.iframe <= 0 && d < e.r + p.r - 6) {
         if (w.shieldCharges > 0) {
@@ -1482,7 +1503,7 @@
     if (state === 'play' || state === 'levelup' || state === 'clear' || state === 'pause') drawHUD();
     cx.restore();
     pauseBtn.classList.toggle('hidden', state !== 'play');
-    muteBtn.classList.toggle('hidden', state !== 'play');
+    muteBtn.classList.toggle('hidden', state !== 'play' && state !== 'pause');
     requestAnimationFrame(frame);
   }
   reset();
