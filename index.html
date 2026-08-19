@@ -163,7 +163,7 @@
     <div class="eyebrow">CLEWINER MINI GAME 3</div>
     <h1>클위너 서바이버</h1>
     <div class="howto">
-      <div><b>드래그</b> 또는 <b>방향키·WASD</b>로 도망 다니세요</div>
+      <div>화면 <b>아래쪽 조이스틱</b>(또는 <b>방향키·WASD</b>)으로 도망 다니세요</div>
       <div>붓은 <b>알아서 날아갑니다</b> — 몹을 <b>전멸시키면</b> 다음 라운드!</div>
       <div>방울 게이지(맨 위)가 차면 <b>바로 스킬 3택</b>이 떠요</div>
       <div>보스·물때가 뱉는 <b>포자탄은 붓으로 못 막아요</b> — 몸으로 피하기!</div>
@@ -542,22 +542,38 @@
   const keys = {};
   addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
   addEventListener('keyup',   e => keys[e.key.toLowerCase()] = false);
-  // 드래그 = 손가락이 움직인 만큼 즉시 이동 (따라오기 방식보다 반응이 즉각적)
-  let lastPt = null;
-  const drag = { dx: 0, dy: 0 };
+  // 가상 조이스틱 — 하단을 누르면 그 자리에 스틱이 서고, 기울인 방향·세기로 이동한다
+  const JOY = { homeX: W / 2, homeY: H - 108, R: 58, KNOB: 27, DEAD: 7, ZONE: .42 };
+  const joy = { on: false, id: null, x: JOY.homeX, y: JOY.homeY, kx: 0, ky: 0 };
   function toGame(e) {
     const r = cv.getBoundingClientRect();
     return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
   }
-  cv.addEventListener('pointerdown', e => lastPt = toGame(e));
-  addEventListener('pointermove', e => {
-    if (!lastPt) return;
+  cv.addEventListener('pointerdown', e => {
     const q = toGame(e);
-    drag.dx += q.x - lastPt.x;
-    drag.dy += q.y - lastPt.y;
-    lastPt = q;
+    if (q.y < H * JOY.ZONE) return;          // 위쪽 절반은 조작 영역이 아니다
+    joy.on = true;
+    joy.id = e.pointerId;
+    joy.x = Math.max(JOY.R + 6, Math.min(W - JOY.R - 6, q.x));
+    joy.y = Math.max(H * JOY.ZONE + JOY.R * .4, Math.min(H - JOY.R - 8, q.y));
+    joy.kx = 0; joy.ky = 0;
+    try { cv.setPointerCapture(e.pointerId); } catch (err) {}
   });
-  addEventListener('pointerup', () => lastPt = null);
+  addEventListener('pointermove', e => {
+    if (!joy.on || e.pointerId !== joy.id) return;
+    const q = toGame(e);
+    let dx = q.x - joy.x, dy = q.y - joy.y;
+    const len = Math.hypot(dx, dy);
+    if (len > JOY.R) { dx = dx / len * JOY.R; dy = dy / len * JOY.R; }
+    joy.kx = dx; joy.ky = dy;
+  });
+  function joyEnd(e) {
+    if (!joy.on) return;
+    if (e && e.pointerId !== undefined && e.pointerId !== joy.id) return;
+    joy.on = false; joy.id = null; joy.kx = 0; joy.ky = 0;
+  }
+  addEventListener('pointerup', joyEnd);
+  addEventListener('pointercancel', joyEnd);
 
   document.getElementById('startBtn').addEventListener('click', begin);
   document.getElementById('retryBtn').addEventListener('click', begin);
@@ -689,7 +705,7 @@
     }
     muteBtn.textContent = music.muted ? '🔇' : '🔊';
   });
-  function scrubKeys() { for (const k in keys) keys[k] = false; lastPt = null; drag.dx = 0; drag.dy = 0; }
+  function scrubKeys() { for (const k in keys) keys[k] = false; joyEnd(); }
   pauseBtn.addEventListener('click', pauseGame);
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('pauseRestart').addEventListener('click', begin);
@@ -780,7 +796,7 @@
     }
     if (p.slick > 0) p.slick -= dt;
 
-    // 이동 — 이번 프레임 원하는 변위(키보드+드래그)를 계산
+    // 이동 — 이번 프레임 원하는 변위(키보드 + 조이스틱)를 계산
     let mx = 0, my = 0;
     if (keys.arrowleft || keys.a) mx -= 1;
     if (keys.arrowright || keys.d) mx += 1;
@@ -792,14 +808,13 @@
       wantX += mx / ml * p.speed * dt;
       wantY += my / ml * p.speed * dt;
     }
-    if (drag.dx !== 0 || drag.dy !== 0) {
-      let dxs = drag.dx * 1.25, dys = drag.dy * 1.25;
-      const mag = Math.hypot(dxs, dys);
-      const cap = p.speed * dt;           // 빨리 그어도 최대 속도는 고정
-      if (mag > cap) { dxs = dxs / mag * cap; dys = dys / mag * cap; }
-      wantX += dxs;
-      wantY += dys;
-      drag.dx = 0; drag.dy = 0;
+    if (joy.on) {
+      const len = Math.hypot(joy.kx, joy.ky);
+      if (len > JOY.DEAD) {
+        const mag = Math.min(1, len / JOY.R);       // 기울인 만큼 속도가 붙는다
+        wantX += joy.kx / len * p.speed * mag * dt;
+        wantY += joy.ky / len * p.speed * mag * dt;
+      }
     }
     if (p.slick > 0) {                    // 물때 장판 — 관성이 생기고 조작이 30%만 먹힘
       p.vx = p.vx * .93 + wantX * .3;
@@ -1422,6 +1437,38 @@
     }
   }
 
+  function drawJoystick() {
+    if (state !== 'play' && state !== 'pause') return;
+    const bx = joy.on ? joy.x : JOY.homeX;
+    const by = joy.on ? joy.y : JOY.homeY;
+    cx.save();
+    // 바깥 링
+    cx.globalAlpha = joy.on ? .55 : .26;
+    cx.fillStyle = '#FFFFFF';
+    cx.beginPath(); cx.arc(bx, by, JOY.R, 0, 6.28); cx.fill();
+    cx.globalAlpha = joy.on ? .75 : .34;
+    cx.strokeStyle = '#17233D';
+    cx.lineWidth = 2.5;
+    cx.beginPath(); cx.arc(bx, by, JOY.R, 0, 6.28); cx.stroke();
+    // 방향 힌트 십자
+    if (!joy.on) {
+      cx.globalAlpha = .22;
+      cx.lineWidth = 2;
+      cx.beginPath();
+      cx.moveTo(bx - 16, by); cx.lineTo(bx + 16, by);
+      cx.moveTo(bx, by - 16); cx.lineTo(bx, by + 16);
+      cx.stroke();
+    }
+    // 스틱
+    cx.globalAlpha = joy.on ? .95 : .4;
+    cx.fillStyle = '#CF3339';
+    cx.beginPath(); cx.arc(bx + joy.kx, by + joy.ky, JOY.KNOB, 0, 6.28); cx.fill();
+    cx.globalAlpha = joy.on ? .5 : .25;
+    cx.fillStyle = '#FFFFFF';
+    cx.beginPath(); cx.arc(bx + joy.kx - 7, by + joy.ky - 8, 7, 0, 6.28); cx.fill();
+    cx.restore();
+  }
+
   // ---- 루프 ----
   let last = 0;
   function frame(ts) {
@@ -1502,6 +1549,7 @@
     }
     if (state === 'play' || state === 'levelup' || state === 'clear' || state === 'pause') drawHUD();
     cx.restore();
+    drawJoystick();
     pauseBtn.classList.toggle('hidden', state !== 'play');
     muteBtn.classList.toggle('hidden', state !== 'play' && state !== 'pause');
     requestAnimationFrame(frame);
