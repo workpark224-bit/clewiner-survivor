@@ -56,6 +56,7 @@
   .overlay.hidden{display:none}
   .overlay{overflow-y:auto;justify-content:flex-start}
   .overlay::before,.overlay::after{content:'';margin:auto;flex-shrink:0}
+  .overlay > *{flex-shrink:0}
   .eyebrow{font-size:12px;font-weight:700;letter-spacing:.22em;color:var(--ink-soft)}
   h1{font-size:clamp(28px,8vw,40px);font-weight:900;line-height:1.2;
     text-wrap:balance;letter-spacing:-.02em}
@@ -108,6 +109,7 @@
   .shoplink b{color:var(--red)}
   .btnrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
   .btnrow button{font-size:14px;padding:12px 22px}
+  button.boss{background:#17233D;box-shadow:0 4px 12px rgba(23,35,61,.3);font-size:13px;padding:10px 16px}
   #certOverlay{
     position:absolute;inset:0;z-index:10;
     background:rgba(23,35,61,.85);
@@ -171,6 +173,14 @@
     </div>
     <div class="evt hidden" id="evtBanner"></div>
     <button id="startBtn">출동!</button>
+    <div id="testBox" style="display:none;flex-direction:column;gap:8px;align-items:center">
+      <div class="tag" style="margin:0">🧪 보스전 연습 (테스트 전용 · 인증 코드 없음)</div>
+      <div class="btnrow">
+        <button class="boss" data-boss="1">물때 대왕</button>
+        <button class="boss" data-boss="2">핑크 얼룩</button>
+        <button class="boss" data-boss="3">곰팡이 대왕</button>
+      </div>
+    </div>
     <a class="shoplink" href="https://clewiner.com/product/detail.html?product_no=38" target="_blank" rel="noopener">이 게임의 주인공 <b>곰팡이제거제 →</b></a>
   </div>
 
@@ -455,17 +465,18 @@
 
   // ---- 상태 ----
   let state = 'start';
-  let p, w, enemies, bullets, gems, parts, shots, puddles, t, kills, level, xp, xpNeed;
+  let p, w, enemies, bullets, gems, parts, shots, puddles, mines, slams, testMode, t, kills, level, xp, xpNeed;
   let roundNum, phase, queue, pendingLevels, clearTimer, introTimer, lvFlash;
   let spawnAt, bossWarn, shake, cleared, bossPending, wallInset;
   let bestRound = +(localStorage.getItem('cw-sv-best-round') || 0);
 
   function reset() {
-    p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 205, magnet: 90, iframe: 0, tilt: 0, face: 1,
+    p = { x: W / 2, y: H * .6, r: 26, hp: 4, maxHp: 4, speed: 235, magnet: 90, iframe: 0, tilt: 0, face: 1,
       vx: 0, vy: 0, slick: 0 };
     w = { cd: .7, timer: 0, count: 1, dmg: 1, pierce: 0, brushes: 0, brushAngle: 0,
-      shieldLv: 0, shieldCharges: 0 };
+      shieldLv: 0, shieldCharges: 0, focusLv: 0, focusTimer: 0, mineLv: 0, mineTimer: 0 };
     enemies = []; bullets = []; gems = []; parts = []; shots = []; puddles = [];
+    mines = []; slams = []; testMode = false;
     t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5;
     roundNum = 0; phase = 'fight'; queue = []; pendingLevels = 0;
     clearTimer = 0; introTimer = 0; lvFlash = 0;
@@ -503,10 +514,13 @@
     { name: '붓 하나 더', desc: '붓 +1발 — 추가 붓은 위력 60%', max: 3, apply: () => w.count++ },
     { name: '빠른 손놀림', desc: '붓 던지는 속도가 빨라져요', max: 4, apply: () => w.cd *= .9 },
     { name: '진한 세제', desc: '던지는 붓 한 방이 더 아파요', max: 4, apply: () => w.dmg++ },
-    { name: '회전 붓', desc: '주위를 도는 붓 +1 — 스치면 콕콕 견제', max: 2, apply: () => w.brushes++ },
-    { name: '방울 자석', desc: '경험치 방울을 멀리서도 끌어와요', max: 4, apply: () => p.magnet += 45 },
+    { name: '회전 붓', desc: '주위를 도는 붓 +1 — 붓마다 따로 타격해요', max: 2, apply: () => w.brushes++ },
+    { name: '관통 붓', desc: '붓이 적을 뚫고 지나가며 잠깐 둔하게 만들어요', max: 2, apply: () => w.pierce++ },
+    { name: '집중 세척', desc: '가장 튼튼한 적에게 큰 한 방 — 보스전 특화', max: 3, apply: () => { w.focusLv++; w.focusTimer = 1; } },
+    { name: '거품 지뢰', desc: '발밑에 거품을 놓아요 — 적이 닿으면 펑!', max: 3, apply: () => { w.mineLv++; w.mineTimer = .5; } },
+    { name: '스피드 업', desc: '이동 속도 +12%', max: 3, apply: () => p.speed *= 1.12 },
+    { name: '방울 자석', desc: '경험치 방울을 멀리서도 끌어와요', max: 2, apply: () => p.magnet += 60 },
     { name: '튼튼한 용기', desc: '최대 체력 +1, 체력 2 회복', max: 3, apply: () => { p.maxHp++; p.hp = Math.min(p.maxHp, p.hp + 2); } },
-    { name: '관통 붓', desc: '붓이 적을 뚫고 지나가요', max: 3, apply: () => w.pierce++ },
   ];
   const HEAL = { name: '목욕 휴식', desc: '체력 2 회복', apply: () => p.hp = Math.min(p.maxHp, p.hp + 2) };
 
@@ -676,6 +690,38 @@
     pauseScreen.classList.add('hidden');
   }
 
+  // 🧪 보스전 연습 모드 — 주소에 ?test 가 있을 때만 열린다
+  const TESTABLE = /[?&]test/i.test(location.search);
+  if (TESTABLE) document.getElementById('testBox').style.display = 'flex';
+  const PRESET = [
+    ['진한 세제', '진한 세제', '붓 하나 더', '빠른 손놀림', '튼튼한 용기'],
+    ['진한 세제', '진한 세제', '진한 세제', '진한 세제', '붓 하나 더', '붓 하나 더',
+     '빠른 손놀림', '빠른 손놀림', '튼튼한 용기'],
+    ['진한 세제', '진한 세제', '진한 세제', '진한 세제', '붓 하나 더', '붓 하나 더', '붓 하나 더',
+     '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '집중 세척',
+     '튼튼한 용기', '튼튼한 용기'],
+  ];
+  function beginBoss(idx) {
+    begin();
+    testMode = true;
+    for (const nm of PRESET[idx - 1]) {
+      const u = UPS.find(x => x.name === nm);
+      if (u && u.lvl < u.max) { u.lvl++; u.apply(); }
+    }
+    level = [6, 10, 15][idx - 1];
+    xp = 0; xpNeed = 5 + level * 4;
+    roundNum = idx * 5;
+    phase = 'fight';
+    queue = [];
+    bossPending = false;
+    introTimer = 0;
+    spawnBoss(idx);
+    musicBoss();
+  }
+  document.querySelectorAll('button.boss').forEach(b => {
+    b.addEventListener('click', () => beginBoss(+b.dataset.boss));
+  });
+
   // 일시정지
   const pauseScreen = document.getElementById('pauseScreen');
   const pauseBtn = document.getElementById('pauseBtn');
@@ -765,7 +811,7 @@
   }
   function spawnBoss(idx) {
     const name = BOSS_NAMES[(idx - 1) % 3];
-    const hp = idx <= 3 ? [160, 380, 850][idx - 1] : 850 * Math.pow(2.2, idx - 3);
+    const hp = idx <= 3 ? [160, 420, 1000][idx - 1] : 1000 * Math.pow(2.2, idx - 3);
     const e = {
       type: ['scale', 'pink', 'mold'][(idx - 1) % 3],
       boss: true, name, idx, r: 52, hp, maxHp: hp,
@@ -853,9 +899,9 @@
     if (phase === 'fight') {
       spawnAt -= dt;
       if (spawnAt <= 0 && queue.length) {
-        const batch = 1 + Math.floor(roundNum / 5);
+        const batch = 1 + Math.floor(roundNum / 7);      // 웨이브가 한꺼번에 쏟아지지 않게
         for (let k = 0; k < batch && queue.length; k++) spawnType(queue.pop());
-        spawnAt = Math.max(.25, .8 - roundNum * .028);
+        spawnAt = Math.max(.3, .8 - roundNum * .028);
       }
       if (!queue.length && enemies.length === 0) {
         if (bossPending) {
@@ -898,6 +944,57 @@
     // 회전 붓
     w.brushAngle += dt * 2.6;
 
+    // 집중 세척 — 가장 튼튼한 적에게 큰 한 방
+    if (w.focusLv > 0) {
+      w.focusTimer -= dt;
+      if (w.focusTimer <= 0 && enemies.length) {
+        w.focusTimer = [5, 4, 3][w.focusLv - 1];
+        let tgt = -1, best = -1;
+        for (let i2 = 0; i2 < enemies.length; i2++)
+          if (enemies[i2].hp > best) { best = enemies[i2].hp; tgt = i2; }
+        if (tgt >= 0) {
+          const ex = enemies[tgt].x, ey = enemies[tgt].y;
+          slams.push({ x: ex, y: ey, life: .35 });
+          hurtEnemy(tgt, [12, 20, 30][w.focusLv - 1], 0, 0);
+          burst(ex, ey, 'bubble', 16);
+          sfx.hit();
+        }
+      }
+    }
+
+    // 거품 지뢰 — 발밑에 놓고, 적이 닿으면 터진다
+    if (w.mineLv > 0) {
+      w.mineTimer -= dt;
+      if (w.mineTimer <= 0) {
+        w.mineTimer = [2.5, 2, 1.5][w.mineLv - 1];
+        if (mines.length < 6) mines.push({ x: p.x, y: p.y, life: 6 });
+      }
+    }
+    const mineR = w.mineLv > 0 ? [34, 40, 46][w.mineLv - 1] : 0;
+    for (let i2 = mines.length - 1; i2 >= 0; i2--) {
+      const mn = mines[i2];
+      mn.life -= dt;
+      if (mn.life <= 0) { mines.splice(i2, 1); continue; }
+      let touched = false;
+      for (const e2 of enemies)
+        if (Math.hypot(e2.x - mn.x, e2.y - mn.y) < mineR * .55 + e2.r) { touched = true; break; }
+      if (touched) {
+        const dmgM = [3, 5, 8][w.mineLv - 1];
+        for (let j2 = enemies.length - 1; j2 >= 0; j2--) {
+          const e2 = enemies[j2];
+          if (Math.hypot(e2.x - mn.x, e2.y - mn.y) < mineR + e2.r)
+            hurtEnemy(j2, dmgM, e2.x - mn.x, e2.y - mn.y);
+        }
+        burst(mn.x, mn.y, 'bubble', 14);
+        mines.splice(i2, 1);
+        sfx.pop();
+      }
+    }
+    for (let i2 = slams.length - 1; i2 >= 0; i2--) {
+      slams[i2].life -= dt;
+      if (slams[i2].life <= 0) slams.splice(i2, 1);
+    }
+
     // 거품
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
@@ -908,6 +1005,7 @@
         if (b.hits.includes(e)) continue;   // 관통한 적을 겹친 동안 연타하지 않게
         if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
           b.hits.push(e);
+          if (w.pierce > 0) e.slow = 1.2;   // 관통 붓 — 맞은 적을 잠깐 둔하게
           hurtEnemy(j, b.dmg, b.vx, b.vy);
           burst(b.x, b.y, 'bubble', 4);
           if (b.pierce > 0) { b.pierce--; } else { bullets.splice(i, 1); }
@@ -964,6 +1062,7 @@
           if (e.dashAt <= 0) { e.aiming = 1; e.dashAt = 5; }
         }
       }
+      if (e.slow > 0) { e.slow -= dt; spd *= .6; }      // 관통 둔화
       if (e.boss && e.hp < e.maxHp * .3) spd *= 1.45;   // 격노
       if (e.charging > 0) spd = 0;                       // 차징 중엔 정지
       if (e.aiming > 0 || e.dashT > 0 || e.rest > 0) spd = 0;   // 돌진 사이클 중엔 추격 정지
@@ -1025,14 +1124,15 @@
         }
       }
 
-      // 붓 접촉
+      // 붓 접촉 — 붓마다 독립 쿨다운 (2개째가 실제로 딜을 올린다)
       if (w.brushes > 0) {
-        if (e.brushCd > 0) e.brushCd -= dt;
-        else for (let k = 0; k < w.brushes; k++) {
+        if (!e.brushCds) e.brushCds = [0, 0];
+        for (let k = 0; k < w.brushes; k++) {
+          if (e.brushCds[k] > 0) { e.brushCds[k] -= dt; continue; }
           const a = w.brushAngle + k * 6.28 / w.brushes;
           const bx = p.x + Math.cos(a) * 72, by = p.y + Math.sin(a) * 72;
           if (Math.hypot(bx - e.x, by - e.y) < 26 + e.r * .5) {
-            e.brushCd = .5;                 // 견제용 — 벽이 되면 안 됨
+            e.brushCds[k] = .5;
             hurtEnemy(i, 1, (e.x - p.x) * 3, (e.y - p.y) * 3);
             burst(bx, by, 'bubble', 3);
             break;
@@ -1174,7 +1274,11 @@
     document.getElementById('stCTime').textContent = fmt(t);
     document.getElementById('stCKill').textContent = kills;
     document.getElementById('stCLv').textContent = level;
-    document.getElementById('clearCode').textContent = CODES[Math.floor(Math.random() * CODES.length)];
+    // 연습 모드로 깬 판은 인증 코드를 주지 않는다 (이벤트 부정 방지)
+    document.getElementById('clearCode').textContent =
+      testMode ? '연습 모드' : CODES[Math.floor(Math.random() * CODES.length)];
+    kakaoBtn.classList.toggle('hidden', testMode || !EVENT.kakaoChat);
+    certBtn.classList.toggle('hidden', testMode);
     kakaoBtn.textContent = '💬 카카오톡 전송';
     certBtn.textContent = '📸 인증 이미지 복사';
     clearScreen.classList.remove('hidden');
@@ -1490,6 +1594,31 @@
       cx.strokeStyle = '#44603A';
       cx.lineWidth = 6;
       cx.strokeRect(wallInset, wallInset, W - wallInset * 2, H - wallInset * 2);
+    }
+    // 거품 지뢰
+    if (w.mineLv > 0) {
+      const mr = [34, 40, 46][w.mineLv - 1];
+      for (const mn of mines) {
+        cx.globalAlpha = Math.min(1, mn.life / 1.2) * .75;
+        cx.strokeStyle = 'rgba(79,163,199,.95)';
+        cx.lineWidth = 2.5;
+        cx.fillStyle = 'rgba(191,227,240,.4)';
+        const pr = mr * (.85 + Math.sin(t * 5 + mn.x) * .07);
+        cx.beginPath(); cx.arc(mn.x, mn.y, pr, 0, 6.28); cx.fill(); cx.stroke();
+        cx.strokeStyle = 'rgba(255,255,255,.9)';
+        cx.lineWidth = 2;
+        cx.beginPath(); cx.arc(mn.x - pr * .3, mn.y - pr * .35, pr * .28, -2.4, -1); cx.stroke();
+        cx.globalAlpha = 1;
+      }
+    }
+    // 집중 세척 타격 파장
+    for (const sl of slams) {
+      const pr = (1 - sl.life / .35);
+      cx.globalAlpha = 1 - pr;
+      cx.strokeStyle = '#CF3339';
+      cx.lineWidth = 6 - pr * 4;
+      cx.beginPath(); cx.arc(sl.x, sl.y, 20 + pr * 55, 0, 6.28); cx.stroke();
+      cx.globalAlpha = 1;
     }
     // 물때 장판
     for (const pd of puddles) {
