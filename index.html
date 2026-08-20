@@ -693,23 +693,12 @@
   // 🧪 보스전 연습 모드 — 주소에 ?test 가 있을 때만 열린다
   const TESTABLE = /[?&]test/i.test(location.search);
   if (TESTABLE) document.getElementById('testBox').style.display = 'flex';
-  const PRESET = [
-    ['진한 세제', '진한 세제', '붓 하나 더', '빠른 손놀림', '튼튼한 용기'],
-    ['진한 세제', '진한 세제', '진한 세제', '진한 세제', '붓 하나 더', '붓 하나 더',
-     '빠른 손놀림', '빠른 손놀림', '튼튼한 용기'],
-    ['진한 세제', '진한 세제', '진한 세제', '진한 세제', '붓 하나 더', '붓 하나 더', '붓 하나 더',
-     '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '고압 물줄기',
-     '튼튼한 용기', '튼튼한 용기'],
-  ];
   function beginBoss(idx) {
     begin();
     testMode = true;
-    for (const nm of PRESET[idx - 1]) {
-      const u = UPS.find(x => x.name === nm);
-      if (u && u.lvl < u.max) { u.lvl++; u.apply(); }
-    }
     level = [6, 10, 15][idx - 1];
-    xp = 0; xpNeed = 5 + level * 4;
+    xp = 0;
+    xpNeed = 5 + level * 4;
     roundNum = idx * 5;
     phase = 'fight';
     queue = [];
@@ -717,6 +706,8 @@
     introTimer = 0;
     spawnBoss(idx);
     musicBoss();
+    pendingLevels = [5, 9, 14][idx - 1];   // 그 시점에 가졌을 픽 수 — 스킬은 직접 골라서 입장
+    openLevelUp();
   }
   document.querySelectorAll('button.boss').forEach(b => {
     b.addEventListener('click', () => beginBoss(+b.dataset.boss));
