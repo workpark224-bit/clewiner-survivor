@@ -516,7 +516,7 @@
     { name: '진한 세제', desc: '던지는 붓 한 방이 더 아파요', max: 4, apply: () => w.dmg++ },
     { name: '회전 붓', desc: '주위를 도는 붓 +1 — 붓마다 따로 타격해요', max: 2, apply: () => w.brushes++ },
     { name: '관통 붓', desc: '붓이 적을 뚫고 지나가며 잠깐 둔하게 만들어요', max: 2, apply: () => w.pierce++ },
-    { name: '집중 세척', desc: '가장 튼튼한 적에게 큰 한 방 — 보스전 특화', max: 3, apply: () => { w.focusLv++; w.focusTimer = 1; } },
+    { name: '고압 물줄기', desc: '가장 튼튼한 적에게 물줄기를 내리꽂아요 — 보스전 특화', max: 3, apply: () => { w.focusLv++; w.focusTimer = 1; } },
     { name: '거품 지뢰', desc: '발밑에 거품을 놓아요 — 적이 닿으면 펑!', max: 3, apply: () => { w.mineLv++; w.mineTimer = .5; } },
     { name: '스피드 업', desc: '이동 속도 +12%', max: 3, apply: () => p.speed *= 1.12 },
     { name: '방울 자석', desc: '경험치 방울을 멀리서도 끌어와요', max: 2, apply: () => p.magnet += 60 },
@@ -698,7 +698,7 @@
     ['진한 세제', '진한 세제', '진한 세제', '진한 세제', '붓 하나 더', '붓 하나 더',
      '빠른 손놀림', '빠른 손놀림', '튼튼한 용기'],
     ['진한 세제', '진한 세제', '진한 세제', '진한 세제', '붓 하나 더', '붓 하나 더', '붓 하나 더',
-     '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '집중 세척',
+     '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '빠른 손놀림', '고압 물줄기',
      '튼튼한 용기', '튼튼한 용기'],
   ];
   function beginBoss(idx) {
@@ -948,16 +948,14 @@
     if (w.focusLv > 0) {
       w.focusTimer -= dt;
       if (w.focusTimer <= 0 && enemies.length) {
-        w.focusTimer = [5, 4, 3][w.focusLv - 1];
+        w.focusTimer = [5, 3.6, 3][w.focusLv - 1];
         let tgt = -1, best = -1;
         for (let i2 = 0; i2 < enemies.length; i2++)
           if (enemies[i2].hp > best) { best = enemies[i2].hp; tgt = i2; }
         if (tgt >= 0) {
-          const ex = enemies[tgt].x, ey = enemies[tgt].y;
-          slams.push({ x: ex, y: ey, life: .35 });
-          hurtEnemy(tgt, [12, 20, 30][w.focusLv - 1], 0, 0);
-          burst(ex, ey, 'bubble', 16);
-          sfx.hit();
+          slams.push({ target: enemies[tgt], x: enemies[tgt].x, y: enemies[tgt].y,
+            t: 0, dmg: [15, 22, 30][w.focusLv - 1], hit: false });
+          beep(980, .2, 'sine', .1, 420);
         }
       }
     }
@@ -966,7 +964,7 @@
     if (w.mineLv > 0) {
       w.mineTimer -= dt;
       if (w.mineTimer <= 0) {
-        w.mineTimer = [2.5, 2, 1.5][w.mineLv - 1];
+        w.mineTimer = [2.4, 1.8, 1.4][w.mineLv - 1];
         if (mines.length < 6) mines.push({ x: p.x, y: p.y, life: 6 });
       }
     }
@@ -979,7 +977,7 @@
       for (const e2 of enemies)
         if (Math.hypot(e2.x - mn.x, e2.y - mn.y) < mineR * .55 + e2.r) { touched = true; break; }
       if (touched) {
-        const dmgM = [3, 5, 8][w.mineLv - 1];
+        const dmgM = [4, 7, 11][w.mineLv - 1];
         for (let j2 = enemies.length - 1; j2 >= 0; j2--) {
           const e2 = enemies[j2];
           if (Math.hypot(e2.x - mn.x, e2.y - mn.y) < mineR + e2.r)
@@ -991,8 +989,18 @@
       }
     }
     for (let i2 = slams.length - 1; i2 >= 0; i2--) {
-      slams[i2].life -= dt;
-      if (slams[i2].life <= 0) slams.splice(i2, 1);
+      const sl = slams[i2];
+      sl.t += dt;
+      const ti = enemies.indexOf(sl.target);
+      if (ti >= 0 && sl.t < .3) { sl.x = sl.target.x; sl.y = sl.target.y; }   // 조준 중엔 따라간다
+      if (!sl.hit && sl.t >= .3) {
+        sl.hit = true;
+        if (ti >= 0) hurtEnemy(ti, sl.dmg, 0, 0);
+        burst(sl.x, sl.y, 'bubble', 12);
+        shake = reduceMotion ? 0 : .3;
+        beep(300, .3, 'sawtooth', .12, 90);
+      }
+      if (sl.t > 1) slams.splice(i2, 1);
     }
 
     // 거품
@@ -1541,6 +1549,21 @@
     }
   }
 
+  function srnd(i) { const v = Math.sin(i * 12.9898) * 43758.5453; return v - Math.floor(v); }
+  function microBubble(x, y, r, alpha) {
+    cx.globalAlpha = alpha;
+    cx.fillStyle = 'rgba(248,253,255,.92)';
+    cx.beginPath(); cx.arc(x, y, r, 0, 6.28); cx.fill();
+    cx.strokeStyle = 'rgba(126,182,206,.75)';
+    cx.lineWidth = Math.max(.8, r * .16);
+    cx.beginPath(); cx.arc(x, y, r, 0, 6.28); cx.stroke();
+    if (r > 3.5) {
+      cx.fillStyle = 'rgba(255,255,255,.95)';
+      cx.beginPath(); cx.arc(x - r * .3, y - r * .33, r * .26, 0, 6.28); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
+
   function drawJoystick() {
     if (state !== 'play' && state !== 'pause') return;
     const bx = joy.on ? joy.x : JOY.homeX;
@@ -1595,30 +1618,68 @@
       cx.lineWidth = 6;
       cx.strokeRect(wallInset, wallInset, W - wallInset * 2, H - wallInset * 2);
     }
-    // 거품 지뢰
+    // 거품 지뢰 — 미세 기포가 빽빽한 폼 뭉치
     if (w.mineLv > 0) {
       const mr = [34, 40, 46][w.mineLv - 1];
       for (const mn of mines) {
-        cx.globalAlpha = Math.min(1, mn.life / 1.2) * .75;
-        cx.strokeStyle = 'rgba(79,163,199,.95)';
-        cx.lineWidth = 2.5;
-        cx.fillStyle = 'rgba(191,227,240,.4)';
-        const pr = mr * (.85 + Math.sin(t * 5 + mn.x) * .07);
-        cx.beginPath(); cx.arc(mn.x, mn.y, pr, 0, 6.28); cx.fill(); cx.stroke();
-        cx.strokeStyle = 'rgba(255,255,255,.9)';
-        cx.lineWidth = 2;
-        cx.beginPath(); cx.arc(mn.x - pr * .3, mn.y - pr * .35, pr * .28, -2.4, -1); cx.stroke();
+        const alpha = Math.min(1, mn.life / 1.2) * .95;
+        const growM = Math.min(1, (6 - mn.life) / .3);   // 설치 직후 부풀어 오름
+        const R = mr * (.5 + .5 * growM);
+        for (let k = 0; k < 36; k++) {
+          const a = k * 2.39996 + mn.x;
+          const nr = Math.sqrt((k + .5) / 36);
+          const br = R * (.11 + .12 * srnd(k * 5 + mn.x)) * (1 - nr * .2);
+          const wob2 = Math.sin(t * 4.5 + k * 1.7) * R * .03;
+          microBubble(mn.x + Math.cos(a) * nr * R + wob2, mn.y + Math.sin(a) * nr * R - wob2,
+            Math.max(1.4, br), alpha);
+        }
+        const sp = (t * 1.4 + mn.x) % 1;
+        cx.globalAlpha = alpha * (1 - Math.abs(sp - .5) * 2);
+        cx.fillStyle = '#FFFFFF';
+        cx.beginPath(); cx.arc(mn.x - R * .3 + sp * R * .6, mn.y - R * .42, 2.6, 0, 6.28); cx.fill();
         cx.globalAlpha = 1;
       }
     }
-    // 집중 세척 타격 파장
+    // 고압 물줄기 — 조준 → 물기둥 → 잔물결
     for (const sl of slams) {
-      const pr = (1 - sl.life / .35);
-      cx.globalAlpha = 1 - pr;
-      cx.strokeStyle = '#CF3339';
-      cx.lineWidth = 6 - pr * 4;
-      cx.beginPath(); cx.arc(sl.x, sl.y, 20 + pr * 55, 0, 6.28); cx.stroke();
-      cx.globalAlpha = 1;
+      if (sl.t < .3) {
+        const pr = sl.t / .3;
+        cx.globalAlpha = .3 + pr * .5;
+        cx.strokeStyle = '#CF3339';
+        cx.lineWidth = 4;
+        cx.beginPath(); cx.arc(sl.x, sl.y, 60 - 30 * pr, 0, 6.28); cx.stroke();
+        cx.globalAlpha = 1;
+      } else if (sl.t < .76) {
+        const g2 = cx.createLinearGradient(0, 0, 0, sl.y);
+        g2.addColorStop(0, 'rgba(255,255,255,.2)');
+        g2.addColorStop(.5, 'rgba(176,222,240,.75)');
+        g2.addColorStop(1, 'rgba(150,210,232,.95)');
+        cx.fillStyle = g2;
+        cx.beginPath();
+        cx.moveTo(sl.x - 14, 0); cx.lineTo(sl.x + 14, 0);
+        cx.lineTo(sl.x + 19, sl.y + 6); cx.lineTo(sl.x - 19, sl.y + 6);
+        cx.closePath(); cx.fill();
+        cx.strokeStyle = 'rgba(255,255,255,.9)';
+        cx.lineWidth = 3;
+        for (let k = 0; k < 4; k++) {
+          const off = ((t * 6 + k * .25) % 1);
+          cx.globalAlpha = .8 - off * .65;
+          const xx = sl.x - 8 + k * 5.3;
+          cx.beginPath(); cx.moveTo(xx, off * sl.y); cx.lineTo(xx, off * sl.y + 34); cx.stroke();
+        }
+        cx.globalAlpha = .5;
+        cx.strokeStyle = 'rgba(255,255,255,.95)';
+        cx.lineWidth = 4;
+        cx.beginPath(); cx.arc(sl.x, sl.y + 4, 18 + 34 * ((t * 3) % 1), 0, 6.28); cx.stroke();
+        cx.globalAlpha = 1;
+      } else {
+        const rp = (sl.t - .76) / .24;
+        cx.globalAlpha = 1 - rp;
+        cx.strokeStyle = 'rgba(140,200,224,.95)';
+        cx.lineWidth = 6 - rp * 4;
+        cx.beginPath(); cx.arc(sl.x, sl.y + 4, 26 + 56 * rp, 0, 6.28); cx.stroke();
+        cx.globalAlpha = 1;
+      }
     }
     // 물때 장판
     for (const pd of puddles) {
